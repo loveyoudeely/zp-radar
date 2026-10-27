@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Адмін-панель | Радар</title>
+    <script src="./config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #090d12;
+            color: #e6edf3;
+            --panel: rgba(17, 24, 32, 0.94);
+            --line: rgba(112, 139, 160, 0.2);
+            --muted: #91a0ad;
+            --accent: #62d6c5;
+            --danger: #ff525b;
+        }
+        * { box-sizing: border-box; }
+        body { min-height: 100vh; margin: 0; background: radial-gradient(ellipse at 50% -20%, #1a2b36 0, #0b1118 52%, #080b10 100%); }
+        button, input, select { font: inherit; }
+        .auth-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+        .auth-screen[hidden], #app-shell[hidden] { display: none !important; }
+        .auth-card { width: min(100%, 390px); padding: 34px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); box-shadow: 0 24px 80px #0009; }
+        .auth-mark { color: var(--accent); font: 700 12px/1.4 Consolas, monospace; letter-spacing: .18em; }
+        .auth-card h1 { margin: 14px 0 8px; font-size: 25px; }
+        .auth-card p { margin: 0 0 24px; color: var(--muted); line-height: 1.5; }
+        .auth-card label, .field-label { display: block; margin: 16px 0 8px; color: #b8c4cd; font-size: 13px; font-weight: 600; }
+        .auth-card input, select { width: 100%; min-height: 48px; padding: 12px 14px; color: #f5f7f8; background: #0b1117; border: 1px solid #354451; border-radius: 9px; outline: none; }
+        .auth-card input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #62d6c51c; }
+        .auth-submit, .primary-btn { width: 100%; min-height: 50px; margin-top: 18px; padding: 12px 18px; border: 1px solid #62d6c580; border-radius: 9px; background: linear-gradient(135deg, #167e79, #125e68); color: white; font-weight: 700; cursor: pointer; box-shadow: 0 8px 22px #0a6b6840; transition: transform .15s ease, filter .15s ease; }
+        .auth-submit:hover, .primary-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+        .auth-error { min-height: 20px; margin-top: 12px !important; color: #ff858a !important; font-size: 13px; }
+        .dashboard { width: min(100% - 32px, 980px); margin: 0 auto; padding: 34px 0 56px; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+        .brand { display: flex; align-items: center; gap: 14px; }
+        .brand-mark { display: grid; width: 44px; height: 44px; place-items: center; border: 1px solid #62d6c55e; border-radius: 12px; color: var(--accent); background: #62d6c511; font: 700 15px Consolas, monospace; }
+        .eyebrow { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .16em; text-transform: uppercase; }
+        .topbar h1 { margin: 4px 0 0; font-size: clamp(20px, 4vw, 26px); }
+        .system-state { display: flex; align-items: center; gap: 8px; color: #a7b5bf; font: 600 11px Consolas, monospace; letter-spacing: .08em; }
+        .system-state::before { width: 8px; height: 8px; border-radius: 50%; background: #48d597; box-shadow: 0 0 12px #48d597aa; content: ""; }
+        .dashboard-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 18px; }
+        .card { padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: 0 16px 38px #0003; }
+        .card-heading { margin: 0 0 5px; font-size: 17px; }
+        .card-description { margin: 0 0 22px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+        .field-label { margin-top: 16px; }
+        select { margin-top: 0; }
+        .threat-item { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-top: 10px; padding: 14px; border: 1px solid var(--line); border-left: 3px solid var(--danger); border-radius: 10px; background: #0b1117; }
+        .threat-item strong { display: block; margin-bottom: 4px; font-size: 14px; }
+        .threat-item small { display: block; margin-top: 4px; color: var(--muted); font: 12px/1.4 Consolas, monospace; }
+        .danger-btn { flex: 0 0 auto; min-height: 40px; padding: 9px 12px; border: 1px solid #ff525b66; border-radius: 8px; color: #ff9297; background: #ff525b14; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .danger-btn:hover { color: #fff; background: #b92f3a; }
+        #status { min-height: 20px; margin: 12px 0 0; color: #ffcc80; font-size: 13px; }
+        #threatList { color: var(--muted); font-size: 14px; }
+        @media (max-width: 700px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .dashboard { padding-top: 22px; }
+            .card { padding: 20px; }
+        }
+        @media (max-width: 420px) {
+            .threat-item { align-items: stretch; flex-direction: column; }
+            .danger-btn { width: 100%; }
+            .system-state { font-size: 0; }
+        }
+    </style>
+</head>
+<body>
+    <section id="auth-screen" class="auth-screen">
+        <form id="auth-form" class="auth-card">
+            <div class="auth-mark">ZP RADAR / ACCESS CONTROL</div>
+            <h1>Захищений доступ</h1>
+            <p>Введіть кодове слово для входу до панелі моніторингу.</p>
+            <label for="access-code">Код доступу</label>
+            <input id="access-code" type="password" autocomplete="current-password" required autofocus>
+            <button class="auth-submit" type="submit">Увійти до системи</button>
+            <p id="auth-error" class="auth-error" role="alert" aria-live="polite"></p>
+        </form>
+    </section>
+
+    <main id="app-shell" class="dashboard" hidden>
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-mark">ZP</div>
+                <div>
+                    <div class="eyebrow">Операційна система · Запоріжжя</div>
+                    <h1>Панель керування загрозами</h1>
+                </div>
+            </div>
+            <div class="system-state">СИСТЕМА АКТИВНА</div>
+        </header>
+
+        <div class="dashboard-grid">
+            <section class="card">
+                <h2 class="card-heading">Нова подія</h2>
+                <p class="card-description">Вкажіть локацію та параметри загрози для публікації на карті.</p>
+                <label class="field-label" for="locSelect">Локація</label>
+                <select id="locSelect" disabled>
+                    <option value="">Завантаження локацій...</option>
+                </select>
+                <label class="field-label" for="threatSelect">Тип загрози</label>
+                <select id="threatSelect">
+                    <option value="Шахед">Шахед</option>
+                    <option value="Ракета">Ракета</option>
+                    <option value="КАБ">КАБ</option>
+                    <option value="Артилерія">Артилерія</option>
+                </select>
+                <label class="field-label" for="lifetimeSelect">Час життя</label>
+                <select id="lifetimeSelect">
+                    <option value="15">15 хвилин</option>
+                    <option value="30" selected>30 хвилин</option>
+                    <option value="60">1 година</option>
+                </select>
+                <button id="addThreatButton" class="primary-btn" type="button" disabled>Опублікувати загрозу</button>
+                <p id="status" role="status" aria-live="polite"></p>
+            </section>
+
+            <section class="card">
+                <h2 class="card-heading">Активні події</h2>
+                <p class="card-description">Загрози, що зараз відображаються на оперативній карті.</p>
+                <div id="threatList">Завантаження...</div>
+            </section>
+        </div>
+    </main>
+    </div>
+
+    <!-- Блок списку активних загроз для їх видалення -->
+    <div class="card">
+        <h3>Активні зони на карті</h3>
+        <div id="threatList">Завантаження...</div>
+    </div>
+
+    <script>
+        function initializeAdmin() {
+        // Підключення до бази
+        const { supabaseUrl, supabaseKey } = window.APP_CONFIG || {};
+        if (!supabaseUrl || !supabaseKey) {
+            throw new Error('Supabase client configuration is missing. Set build environment variables and rebuild.');
+        }
+        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        const statusElement = document.getElementById('status');
+        const locationSelect = document.getElementById('locSelect');
+        const addThreatButton = document.getElementById('addThreatButton');
+        let availableLocations = new Set();
+
+        function setStatus(message, isError = false) {
+            statusElement.textContent = message;
+            statusElement.style.color = isError ? '#ff7777' : '#ffcc80';
+        }
+
+        async function loadLocations() {
+            const response = await fetch('./districts.geojson?v=' + Date.now());
+            if (!response.ok) {
+                throw new Error(`Не вдалося завантажити districts.geojson (HTTP ${response.status}).`);
+            }
+
+            const geojson = await response.json();
+            if (geojson?.type !== 'FeatureCollection' || !Array.isArray(geojson.features)) {
+                throw new Error('districts.geojson не є GeoJSON FeatureCollection.');
+            }
+
+            const locations = new Map();
+            for (const feature of geojson.features) {
+                const properties = feature.properties || {};
+                const name = String(properties.name || '').trim();
+                if (
+                    !name
+                    || properties.feature_type !== 'district'
+                    || !['Polygon', 'MultiPolygon'].includes(feature.geometry?.type)
+                ) continue;
+
+                const key = name.toLocaleLowerCase('uk-UA').replace(/\s+/gu, ' ');
+                if (!locations.has(key)) locations.set(key, name);
+            }
+
+            if (!locations.size) {
+                throw new Error('У districts.geojson не знайдено полігонів локацій.');
+            }
+
+            availableLocations = new Set(locations.values());
+            const options = Array.from(locations.values())
+                .sort((left, right) => left.localeCompare(right, 'uk'))
+                .map(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    return option;
+                });
+            locationSelect.replaceChildren(...options);
+            locationSelect.disabled = false;
+            addThreatButton.disabled = false;
+        }
+
+        async function loadActiveThreats() {
+            const list = document.getElementById('threatList');
+            const { data, error } = await supabaseClient
+                .from('active_threats')
+                .select('id, location, threat_type, expires_at')
+                .order('expires_at', { ascending: true });
+
+            if (error) {
+                list.textContent = `Помилка завантаження: ${error.message}`;
+                throw error;
+            }
+
+            if (!data || data.length === 0) {
+                list.textContent = 'Немає активних загроз. Карта чиста.';
+                return;
+            }
+
+            list.replaceChildren();
+            for (const threat of data) {
+                const item = document.createElement('div');
+                item.className = 'threat-item';
+                const details = document.createElement('div');
+                const location = document.createElement('strong');
+                location.textContent = threat.location || 'Локація не вказана';
+                const threatType = document.createElement('small');
+                threatType.textContent = threat.threat_type || 'Тип загрози не вказаний';
+                threatType.style.display = 'block';
+                const expiry = document.createElement('small');
+                expiry.textContent = threat.expires_at
+                    ? `Зникне: ${new Date(threat.expires_at).toLocaleString('uk-UA')}`
+                    : 'Без автоматичного таймера';
+                expiry.style.display = 'block';
+
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'danger-btn';
+                deleteButton.type = 'button';
+                deleteButton.textContent = 'Відбій / видалити';
+                deleteButton.addEventListener('click', () => {
+                    deleteThreat(threat.id).catch(error => setStatus(`Помилка: ${error.message}`, true));
+                });
+
+                details.append(location, threatType, expiry);
+                item.append(details, deleteButton);
+                list.append(item);
+            }
+        }
+
+        async function addThreat() {
+            const location = document.getElementById('locSelect').value;
+            if (!availableLocations.has(location)) {
+                setStatus('Оберіть локацію зі списку доступних полігонів.', true);
+                return;
+            }
+            const threatType = document.getElementById('threatSelect').value;
+            const lifetimeMinutes = Number(document.getElementById('lifetimeSelect').value);
+            const expiresAt = new Date(Date.now() + lifetimeMinutes * 60_000).toISOString();
+
+            setStatus('Додаю загрозу...');
+            const { error } = await supabaseClient.from('active_threats').insert([{
+                location,
+                threat_type: threatType,
+                expires_at: expiresAt
+            }]);
+            if (error) {
+                setStatus(`Не вдалося додати загрозу: ${error.message}`, true);
+                return;
+            }
+
+            setStatus(`Загрозу додано. Автоматичне видалення через ${lifetimeMinutes} хв.`);
+            await loadActiveThreats();
+        }
+
+        async function deleteThreat(id) {
+            const { error } = await supabaseClient.from('active_threats').delete().eq('id', id);
+            if (error) {
+                setStatus(`Не вдалося видалити загрозу: ${error.message}`, true);
+                return;
+            }
+            setStatus('Загрозу видалено.');
+            await loadActiveThreats();
+        }
+
+        addThreatButton.addEventListener('click', () => {
+            addThreat().catch(error => setStatus(`Помилка: ${error.message}`, true));
+        });
+
+        loadLocations().catch(error => {
+            locationSelect.replaceChildren(new Option('Не вдалося завантажити локації', ''));
+            setStatus(`Помилка завантаження локацій: ${error.message}`, true);
+        });
+
+        loadActiveThreats().catch(error => {
+            setStatus(`Помилка завантаження: ${error.message}`, true);
+        });
+        }
+    </script>
+    <script>
+        (() => {
+            const accessPassword = 'zpradar2026';
+            const sessionKey = 'zp-radar-admin-authorized';
+            const authScreen = document.getElementById('auth-screen');
+            const appShell = document.getElementById('app-shell');
+            const authForm = document.getElementById('auth-form');
+            const accessInput = document.getElementById('access-code');
+            const authError = document.getElementById('auth-error');
+            let initialized = false;
+
+            function unlock() {
+                authScreen.hidden = true;
+                appShell.hidden = false;
+                if (!initialized) {
+                    initialized = true;
+                    initializeAdmin();
+                }
+            }
+
+            authForm.addEventListener('submit', event => {
+                event.preventDefault();
+                if (accessInput.value !== accessPassword) {
+                    authError.textContent = 'Невірний код доступу. Спробуйте ще раз.';
+                    accessInput.value = '';
+                    accessInput.focus();
+                    return;
+                }
+                sessionStorage.setItem(sessionKey, 'true');
+                authError.textContent = '';
+                unlock();
+            });
+
+            if (sessionStorage.getItem(sessionKey) === 'true') unlock();
+        })();
+    </script>
+</body>
+</html>

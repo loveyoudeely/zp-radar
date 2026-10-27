@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест ШІ Парсера</title>
+    <script src="./config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1e1e1e; color: #fff; }
+        textarea { width: 100%; height: 100px; margin-bottom: 10px; background: #2d2d2d; color: #fff; border: 1px solid #444; padding: 10px; font-size: 16px; }
+        button { padding: 10px 20px; cursor: pointer; background: #e53935; color: white; border: none; border-radius: 5px; font-weight: bold; font-size: 16px; }
+        button:hover { background: #ff5252; }
+        #log { margin-top: 20px; white-space: pre-wrap; font-family: monospace; color: #4caf50; font-size: 14px; line-height: 1.5; }
+        .error { color: #ff5252 !important; }
+    </style>
+</head>
+<body>
+
+    <h2>Симуляція повідомлення з Telegram</h2>
+    <textarea id="tgMessage" placeholder="Введіть текст, наприклад: Увага! Зафіксовано шахед, вектор руху на Хортицький район!"></textarea><br>
+    <button onclick="parseAndSend()">Парсити та додати на карту</button>
+
+    <div id="log"></div>
+
+    <script>
+        const { supabaseUrl, supabaseKey } = window.APP_CONFIG || {};
+        if (!supabaseUrl || !supabaseKey) {
+            throw new Error('Supabase client configuration is missing. Set build environment variables and rebuild.');
+        }
+        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        async function parseAndSend() {
+            const text = document.getElementById('tgMessage').value.toLowerCase();
+            const log = document.getElementById('log');
+            log.innerHTML = "<span style='color:#fff'>Аналіз тексту (тестова імітація ШІ)...</span>\n";
+
+            try {
+                let detectedLocation = "Запоріжжя"; 
+                if (text.includes("хортицьк")) detectedLocation = "Хортицький";
+                if (text.includes("шевченківськ")) detectedLocation = "Шевченківський";
+                if (text.includes("дніпровськ")) detectedLocation = "Дніпровський";
+                if (text.includes("космічн")) detectedLocation = "Космічний";
+
+                let detectedThreat = "Невідома загроза";
+                if (text.includes("шахед") || text.includes("мопед")) detectedThreat = "Шахед";
+                if (text.includes("ракет")) detectedThreat = "Ракета";
+                if (text.includes("каб") || text.includes("бомб")) detectedThreat = "КАБ";
+
+                const parsedData = { location: detectedLocation, threat_type: detectedThreat };
+                
+                log.innerHTML += `✅ Розпізнано:\n📍 Локація: ${parsedData.location}\n🚀 Загроза: ${parsedData.threat_type}\n\n`;
+                log.innerHTML += "<span style='color:#fff'>Відправка в базу Supabase...</span>\n";
+
+                const { error } = await supabaseClient
+                    .from('active_threats')
+                    .insert([
+                        { location: parsedData.location, threat_type: parsedData.threat_type }
+                    ]);
+
+                if (error) throw error;
+                
+                log.innerHTML += "✅ Успішно збережено! Відкрий index.html (карту), щоб побачити нову зону.";
+
+            } catch (e) {
+                log.innerHTML += `<span class='error'>❌ Помилка: ${e.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>

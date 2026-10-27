@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="./config.js"></script>
+    <title>Радар Запоріжжя | Спліт-скрін</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #05070d;
+            color: #e8eef2;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; background: #05070d; overflow: hidden; }
+        
+        #app-shell { 
+            display: flex; 
+            width: 100vw; 
+            height: 100vh; 
+            background: #05070d; 
+            position: relative;
+        }
+        .map-container {
+            flex: 1;
+            height: 100%;
+            position: relative;
+            background-color: #05070d;
+            background-image:
+                radial-gradient(circle at 50% 48%, rgba(22, 53, 65, 0.24), transparent 47%),
+                linear-gradient(rgba(64, 105, 119, 0.075) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(64, 105, 119, 0.075) 1px, transparent 1px),
+                radial-gradient(rgba(88, 143, 155, 0.12) 1px, transparent 1px);
+            background-size: auto, 64px 64px, 64px 64px, 16px 16px;
+            background-position: center;
+        }
+        #city-map { border-right: 1px solid rgba(92, 133, 148, 0.3); }
+
+        .panel-title {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            z-index: 1000;
+            padding: 8px 14px;
+            background: rgba(5, 10, 15, .84);
+            border: 1px solid rgba(92, 133, 148, .28);
+            border-radius: 6px;
+            color: #c8e2e5;
+            font: 700 12px Consolas, monospace;
+            letter-spacing: .1em;
+            pointer-events: none;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+
+        .leaflet-container { background: transparent; }
+        .leaflet-overlay-pane svg { overflow: visible; }
+        .leaflet-control-attribution { display: none !important; }
+
+        .microdistrict-label {
+            padding: 2px 4px;
+            color: #b6c5c7;
+            border: 1px solid rgba(91, 132, 137, .38);
+            border-radius: 2px;
+            background: rgba(5, 10, 15, .82);
+            font: 8px/1.2 Consolas, "Courier New", monospace;
+            letter-spacing: .03em;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px #0008;
+        }
+        .screen-frame {
+            position: absolute;
+            z-index: 850;
+            inset: 8px;
+            pointer-events: none;
+            background:
+                linear-gradient(#3d7883, #3d7883) left top / 30px 1px no-repeat,
+                linear-gradient(#3d7883, #3d7883) left top / 1px 30px no-repeat,
+                linear-gradient(#3d7883, #3d7883) right top / 30px 1px no-repeat,
+                linear-gradient(#3d7883, #3d7883) right top / 1px 30px no-repeat,
+                linear-gradient(#3d7883, #3d7883) left bottom / 30px 1px no-repeat,
+                linear-gradient(#3d7883, #3d7883) left bottom / 1px 30px no-repeat,
+                linear-gradient(#3d7883, #3d7883) right bottom / 30px 1px no-repeat,
+                linear-gradient(#3d7883, #3d7883) right bottom / 1px 30px no-repeat;
+            opacity: .5;
+        }
+        .map-hud {
+            position: absolute;
+            z-index: 1000;
+            top: 24px;
+            left: 24px;
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            min-width: 310px;
+            padding: 12px 16px;
+            border: 1px solid rgba(114, 149, 168, 0.3);
+            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(11, 17, 24, 0.95), rgba(5, 9, 15, 0.91));
+            box-shadow: 0 12px 36px #0009, inset 0 1px #d3e5ec0b, 0 0 26px #5bc8d10a;
+            backdrop-filter: blur(12px);
+            pointer-events: auto;
+        }
+        .map-hud-mark {
+            display: grid;
+            width: 38px;
+            height: 38px;
+            flex: 0 0 auto;
+            place-items: center;
+            border: 1px solid #62d6c552;
+            border-radius: 8px;
+            color: #75e4d2;
+            background: #62d6c511;
+            font: 800 13px Consolas, monospace;
+            letter-spacing: .04em;
+        }
+        .map-hud-copy { min-width: 0; }
+        .map-hud-title { color: #eff5f7; font: 700 12px Consolas, "Courier New", monospace; letter-spacing: .055em; white-space: nowrap; }
+        .map-hud-subtitle { margin-top: 6px; color: #8fa4b0; font: 10px Consolas, "Courier New", monospace; letter-spacing: .08em; }
+        .status-online { display: inline-flex; align-items: center; gap: 6px; color: #78e5a9; }
+        .status-online::before { width: 6px; height: 6px; border-radius: 50%; background: #56e692; box-shadow: 0 0 9px #56e692b3; content: ""; }
+        .status-divider { padding: 0 5px; color: #546670; }
+        .admin-link {
+            margin-left: auto;
+            padding: 8px 10px;
+            border: 1px solid #62d6c54d;
+            border-radius: 7px;
+            color: #b8f2e9;
+            background: #62d6c510;
+            font: 700 10px Consolas, monospace;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .admin-link:hover { background: #62d6c524; }
+        
+        .district-name-label {
+            display: block;
+            color: #c8e2e5;
+            background: linear-gradient(110deg, rgba(8, 15, 21, 0.96), rgba(13, 26, 32, 0.9));
+            border: 1px solid rgba(93, 153, 161, 0.5);
+            border-left: 2px solid #53aab1;
+            border-radius: 3px;
+            padding: 6px 9px;
+            font: 600 10px/1.2 Consolas, "Courier New", monospace;
+            letter-spacing: 0.08em;
+            text-shadow: 0 0 8px #5dd8e044;
+            white-space: nowrap;
+            box-shadow: 0 4px 14px #0008, inset 0 0 12px #50c8d10a;
+            pointer-events: none;
+        }
+        .district-label-marker, .district-label-marker div { border: 0; background: transparent; }
+        .district-leader { color: #51a0a9; opacity: .72; filter: drop-shadow(0 0 2px #42d1d440); }
+        .district-anchor { fill: #8bdce0; fill-opacity: .95; stroke: #0a1118; stroke-width: 2; filter: drop-shadow(0 0 5px #60e4e8); }
+        
+        .city-boundary-glow { filter: drop-shadow(0 0 3px #ff243dcc) drop-shadow(0 0 9px #ff102a99); }
+        
+        .district-pulse-yellow { animation: district-yellow-pulse 1.4s ease-in-out infinite alternate; filter: drop-shadow(0 0 5px #ffd40070); }
+        @keyframes district-yellow-pulse { from { fill-opacity: 0.25; } to { fill-opacity: 0.48; } }
+        
+        .district-pulse-red { animation: district-red-pulse 1.4s ease-in-out infinite alternate; filter: drop-shadow(0 0 6px #ff174d66); }
+        @keyframes district-red-pulse { from { fill-opacity: 0.25; } to { fill-opacity: 0.48; } }
+        
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #141414; color: #fff; border: 1px solid #333; box-shadow: 0 0 15px rgba(0, 0, 0, 0.9); }
+        .corner-hud {
+            position: absolute;
+            z-index: 1000;
+            bottom: 24px;
+            display: grid;
+            gap: 7px;
+            padding: 11px 13px;
+            border: 1px solid rgba(92, 133, 148, .28);
+            border-radius: 6px;
+            background: rgba(5, 10, 15, .84);
+            box-shadow: 0 8px 24px #0007;
+            backdrop-filter: blur(8px);
+            color: #8ea4af;
+            font: 9px/1.35 Consolas, "Courier New", monospace;
+            letter-spacing: .08em;
+            pointer-events: none;
+        }
+        .corner-hud strong { color: #c0d2da; font-weight: 600; }
+        .hud-left { left: 24px; }
+        .hud-right { right: 24px; text-align: right; }
+        .hud-status { color: #f0b85f; }
+        .hud-status.is-online { color: #75e1a0; }
+        .hud-status.is-error { color: #ff6975; }
+        .data-credit {
+            position: absolute;
+            z-index: 900;
+            right: 14px;
+            bottom: 7px;
+            color: #52636b;
+            font: 8px Consolas, "Courier New", monospace;
+            letter-spacing: .04em;
+            pointer-events: none;
+        }
+        .pulse-icon { display: flex; align-items: center; justify-content: center; }
+        .pulse-icon .pulse {
+            width: 14px;
+            height: 14px;
+            background: #ff004c;
+            border-radius: 50%;
+            box-shadow: 0 0 0 rgba(255, 0, 76, 0.4);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 0, 76, 0.8); }
+            70% { box-shadow: 0 0 0 15px rgba(255, 0, 76, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 0, 76, 0); }
+        }
+    </style>
+</head>
+<body>
+    <main id="app-shell">
+        <div id="city-map" class="map-container">
+            <div class="panel-title">МІСТО ЗАПОРІЖЖЯ</div>
+        </div>
+        <div id="region-map" class="map-container">
+            <div class="panel-title">ЗАПОРІЗЬКА ОБЛАСТЬ</div>
+        </div>
+        
+        <div class="map-hud">
+            <div class="map-hud-mark">ZP</div>
+            <div class="map-hud-copy">
+                <div class="map-hud-title">ZAPORIZHZHIA // TACTICAL RADAR</div>
+                <div class="map-hud-subtitle">
+                    <span class="status-online">ONLINE</span>
+                    <span class="status-divider">//</span>
+                    <span class="status-online">SECURE</span>
+                    <span class="status-divider">·</span>
+                    LIVE MONITORING
+                </div>
+            </div>
+            <a class="admin-link" href="./admin.html">АДМІН-ПАНЕЛЬ ↗</a>
+        </div>
+        <div class="screen-frame" aria-hidden="true"></div>
+        <aside class="corner-hud hud-left" aria-live="polite">
+            <div>MAP CENTER&nbsp; <strong id="center-coordinates">47.8388 / 35.1396</strong></div>
+            <div>VIEW MODE&nbsp; <strong>SPLIT / VECTOR</strong></div>
+        </aside>
+        <aside class="corner-hud hud-right" aria-live="polite">
+            <div>SUPABASE REALTIME&nbsp; <strong id="realtime-status" class="hud-status">CONNECTING</strong></div>
+            <div>LOCAL TIME&nbsp; <strong id="local-clock">--:--:--</strong></div>
+        </aside>
+        <div class="data-credit">BOUNDARY DATA © OPENSTREETMAP CONTRIBUTORS</div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const mapOptions = {
+            zoomSnap: 0.25,
+            zoomControl: false,
+            attributionControl: false,
+            scrollWheelZoom: false,
+            doubleClickZoom: false,
+            touchZoom: false,
+            boxZoom: false,
+            keyboard: false,
+            dragging: false,
+            tap: false
+        };
+
+        const cityMap = L.map('city-map', { ...mapOptions, center: [47.8388, 35.1396], zoom: 11, minZoom: 9, maxZoom: 18 });
+        const regionMap = L.map('region-map', { ...mapOptions, center: [47.3463, 35.9905], zoom: 7, minZoom: 6, maxZoom: 12 });
+        
+        const centerCoordinates = document.getElementById('center-coordinates');
+        const realtimeStatus = document.getElementById('realtime-status');
+        const localClock = document.getElementById('local-clock');
+        
+        const labelOffsets = {
+            'Дніпровський': [-105, -62],
+            'Хортицький': [-96, 54],
+            'Комунарський': [105, 58],
+            'Шевченківський': [112, -55],
+            'Олександрівський': [92, 28],
+            'Вознесенівський': [-8, -91],
+            'Заводський': [-102, -18]
+        };
+
+        const cityDistrictNames = [
+            'Дніпровський', 'Хортицький', 'Комунарський', 'Шевченківський',
+            'Олександрівський', 'Вознесенівський', 'Заводський'
+        ];
+
+        const districtLabelRecords = [];
+        let cityBounds = null;
+        let regionBounds = null;
+
+        function fitMapsToViewport() {
+            if (cityBounds) {
+                cityMap.invalidateSize({ pan: false });
+                cityMap.fitBounds(cityBounds, { paddingTopLeft: [90, 90], paddingBottomRight: [90, 90], animate: false });
+                cityMap.setMinZoom(cityMap.getZoom());
+                cityMap.setMaxZoom(cityMap.getZoom());
+                positionDistrictLabels();
+            }
+            if (regionBounds) {
+                regionMap.invalidateSize({ pan: false });
+                regionMap.fitBounds(regionBounds, { paddingTopLeft: [100, 40], paddingBottomRight: [40, 40], animate: false });
+                regionMap.setMinZoom(regionMap.getZoom());
+                regionMap.setMaxZoom(regionMap.getZoom());
+            }
+        }
+
+        function updateClock() {
+            localClock.textContent = new Intl.DateTimeFormat('uk-UA', {
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+            }).format(new Date());
+        }
+
+        function positionDistrictLabels() {
+            const scale = 1;
+            for (const record of districtLabelRecords) {
+                const anchorPoint = cityMap.latLngToLayerPoint(record.anchor);
+                const targetPoint = anchorPoint.add(L.point(record.offset[0] * scale, record.offset[1] * scale));
+                const halfLabelWidth = 85;
+                targetPoint.x = Math.max(halfLabelWidth, Math.min(cityMap.getSize().x - halfLabelWidth, targetPoint.x));
+                const target = cityMap.layerPointToLatLng(targetPoint);
+                const delta = targetPoint.subtract(anchorPoint);
+                const length = Math.hypot(delta.x, delta.y);
+                const lineLength = Math.max(0, length - 84);
+                const lineEnd = length ? anchorPoint.add(delta.multiplyBy(lineLength / length)) : anchorPoint;
+                record.marker.setLatLng(target);
+                record.anchorMarker.setLatLng(record.anchor);
+                record.leader.setLatLngs([record.anchor, cityMap.layerPointToLatLng(lineEnd)]);
+            }
+        }
+
+        window.setInterval(updateClock, 1000);
+        updateClock();
+
+        const baseDistrictStyle = { color: '#52767a', weight: 1, opacity: 0, fillColor: '#52767a', fillOpacity: 0 };
+        const baseRegionStyle = { color: '#3d5c66', weight: 1.2, opacity: 0.8, dashArray: '4, 6', fillColor: '#52767a', fillOpacity: 0 };
+        const cityBoundaryStyle = { color: '#ff0000', weight: 3, opacity: 1, fillColor: '#ff0000', fillOpacity: 0, className: 'city-boundary-glow' };
+        const districtSeamStyle = { color: '#52767a', weight: 1, opacity: 0.85, dashArray: '4, 4', interactive: false, className: 'district-leader' };
+        const microdistrictBaseStyle = { color: '#739298', weight: 1, opacity: 0.72, dashArray: '2, 5', fillColor: '#739298', fillOpacity: 0, radius: 3, interactive: true };
+
+        function normalizeDistrictName(value) {
+            return String(value || '').trim().toLocaleLowerCase('uk').replace(/\s+район$/u, '').replace(/\s+/gu, ' ');
+        }
+
+        const districtAliases = new Map();
+        cityDistrictNames.forEach(name => {
+            districtAliases.set(normalizeDistrictName(name), name);
+            districtAliases.set(normalizeDistrictName(`${name} район`), name);
+        });
+        districtAliases.set(normalizeDistrictName('Космічний'), 'Комунарський');
+        districtAliases.set(normalizeDistrictName('Комунарський (Космічний)'), 'Комунарський');
+
+        function canonicalDistrictName(value) {
+            const norm = normalizeDistrictName(value);
+            if (!norm) return null;
+            return districtAliases.get(norm) || (value ? value.trim() : null);
+        }
+
+        const microdistrictAliases = new Map();
+        [
+            ['Хортицький житловий масив', ['Хортицький житловий масив', 'Хортицкий жилой массив', 'Хортицкий жилмассив']],
+            ['Бородінський', ['Бородінський', 'Бородинський', 'Бородинский', 'Бородінський мікрорайон', 'Бородинский микрорайон']],
+            ['Піски', ['Піски', 'Пески']],
+            ['Осипенківський', ['Осипенківський', 'Осипенковский', 'Осипенківський житловий масив', 'Осипенковский жилой массив']],
+            ['Леваневського', ['Леваневського', 'Леваневского', 'Леваневського селище']],
+            ['Космічний', ['Космічний', 'Космический']],
+            ['Південний', ['Південний', 'Южный']],
+            ['Павло-Кічкас', ['Павло-Кічкас', 'Павло-Кичкас', 'Павло-Кічкас']],
+            ['Верхня Хортиця', ['Верхня Хортиця', 'Верхняя Хортица']],
+            ['Соцмісто', ['Соцмісто', 'Соцгород']],
+            ['Великий Луг', ['Великий Луг', 'Большой Луг']]
+        ].forEach(([canonicalName, aliases]) => {
+            aliases.forEach(alias => microdistrictAliases.set(normalizeDistrictName(alias), canonicalName));
+        });
+        const permanentMicrodistrictLabels = new Set(['Бородінський', 'Піски', 'Осипенківський', 'Леваневського', 'Космічний', 'Павло-Кічкас', 'Верхня Хортиця', 'Соцмісто', 'Великий Луг', 'Хортицький житловий масив'].map(normalizeDistrictName));
+
+        function canonicalMicrodistrictName(value) {
+            const normalized = normalizeDistrictName(value);
+            if (/^\d+-й південний мікрорайон$/u.test(normalized)) return 'Південний';
+            return microdistrictAliases.get(normalized) || String(value || '').trim();
+        }
+
+        const cityDistrictLayers = new Map();
+        const regionDistrictLayers = new Map();
+        const regionDistrictGeometries = new Map();
+        const microdistrictLayers = new Map();
+        const microdistrictParentDistricts = new Map();
+        
+        const activeThreats = new Map();
+        const threatExpiryTimers = new Map();
+        const fallbackMarkers = new Map(); 
+
+        function threatColor(threats) {
+            const types = threats.map(threat => String(threat.threat_type || '').toLocaleLowerCase('uk'));
+            if (types.some(type => type.includes('ракета') || type.includes('heavy'))) return '#ff0033';
+            if (types.some(type => type.includes('шахед') || type.includes('express'))) return '#ffea00';
+            return types.some(Boolean) ? '#ff0033' : null;
+        }
+
+        function styleForDistrict(districtName, isCityMap) {
+            const threats = Array.from(activeThreats.values()).filter(threat => {
+                if (isMicrodistrictLocation(threat.location)) {
+                    return microdistrictHasParent(threat.location, districtName);
+                }
+                const canonicalThreat = canonicalDistrictName(threat.location) || normalizeDistrictName(threat.location);
+                const canonicalCheck = canonicalDistrictName(districtName) || normalizeDistrictName(districtName);
+                return canonicalThreat === canonicalCheck;
+            });
+            
+            const defaultStyle = isCityMap ? baseDistrictStyle : baseRegionStyle;
+            const color = threatColor(threats);
+            
+            if (color) {
+                return { ...defaultStyle, fillColor: color, fillOpacity: 0.35, color: isCityMap ? defaultStyle.color : color, opacity: isCityMap ? 0 : 0.8 };
+            }
+            return defaultStyle;
+        }
+
+        function microdistrictHasParent(location, districtName) {
+            const key = normalizeDistrictName(canonicalMicrodistrictName(location));
+            return microdistrictParentDistricts.get(key)?.has(districtName) || false;
+        }
+        function isMicrodistrictLocation(location) { return microdistrictLayers.has(normalizeDistrictName(canonicalMicrodistrictName(location))); }
+
+        function styleForMicrodistrict(microdistrictName) {
+            const name = canonicalMicrodistrictName(microdistrictName);
+            const threats = Array.from(activeThreats.values()).filter(threat => canonicalMicrodistrictName(threat.location) === name);
+            const color = threatColor(threats);
+            if (color) return { ...microdistrictBaseStyle, color, fillColor: color, fillOpacity: 0.92, opacity: 1, weight: 2.5, radius: 10 };
+            return microdistrictBaseStyle;
+        }
+
+        async function refreshFallbackMarker(location) {
+            if (!location) return;
+            const normalizedLoc = normalizeDistrictName(location);
+            const canonicalLoc = canonicalDistrictName(location) || normalizedLoc;
+            const belongsToZaporizhzhia = isMicrodistrictLocation(location)
+                || cityDistrictLayers.has(canonicalLoc)
+                || regionDistrictLayers.has(canonicalLoc);
+            if (belongsToZaporizhzhia) {
+                if (fallbackMarkers.has(normalizedLoc)) {
+                    regionMap.removeLayer(fallbackMarkers.get(normalizedLoc));
+                    fallbackMarkers.delete(normalizedLoc);
+                }
+                return;
+            }
+
+            const threats = Array.from(activeThreats.values()).filter(t => normalizeDistrictName(t.location) === normalizedLoc);
+            
+            if (threats.length === 0) {
+                if (fallbackMarkers.has(normalizedLoc)) {
+                    regionMap.removeLayer(fallbackMarkers.get(normalizedLoc));
+                    fallbackMarkers.delete(normalizedLoc);
+                }
+                return;
+            }
+            if (fallbackMarkers.has(normalizedLoc)) return;
+
+            try {
+                const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}, Запорізька область, Україна&format=json&limit=1`;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`Nominatim returned HTTP ${response.status}`);
+                const data = await response.json();
+                const result = data && data[0];
+                if (
+                    result
+                    && result.class === 'place'
+                    && ['village', 'hamlet', 'isolated_dwelling', 'locality'].includes(result.type)
+                ) {
+                    const latestThreats = Array.from(activeThreats.values())
+                        .filter(threat => normalizeDistrictName(threat.location) === normalizedLoc);
+                    if (!latestThreats.length || fallbackMarkers.has(normalizedLoc)) return;
+
+                    const pulseIcon = L.divIcon({ className: 'pulse-icon', html: '<div class="pulse"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+                    const latitude = Number(result.lat);
+                    const longitude = Number(result.lon);
+                    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+                    const isInsideKnownBoundary = Array.from(regionDistrictGeometries.values())
+                        .flat()
+                        .some(geometry => pointInDistrict([longitude, latitude], geometry));
+                    if (isInsideKnownBoundary) return;
+
+                    const marker = L.marker([latitude, longitude], { icon: pulseIcon })
+                      .addTo(regionMap)
+                      .bindTooltip(`${location.toLocaleUpperCase('uk')} (${latestThreats[0].threat_type || 'Загроза'})`, { direction: 'top', className: 'microdistrict-label', permanent: true, offset: [0, -10] });
+                    fallbackMarkers.set(normalizedLoc, marker);
+                }
+            } catch (error) {
+                console.warn(`Не вдалося визначити невідому локацію "${location}": ${error.message}`);
+            }
+        }
+
+        function refreshLocation(location) {
+            const normalizedLoc = normalizeDistrictName(location);
+            const microdistrictName = canonicalMicrodistrictName(location);
+            let isKnownZone = false;
+
+            if (microdistrictLayers.has(normalizeDistrictName(microdistrictName))) {
+                refreshMicrodistrict(microdistrictName);
+                const parentDistricts = microdistrictParentDistricts.get(normalizeDistrictName(microdistrictName));
+                if (parentDistricts) parentDistricts.forEach(refreshDistrict);
+                isKnownZone = true;
+            } else {
+                const canonicalLoc = canonicalDistrictName(location) || normalizedLoc;
+                if (cityDistrictLayers.has(canonicalLoc) || regionDistrictLayers.has(canonicalLoc)) {
+                    refreshDistrict(canonicalLoc);
+                    isKnownZone = true;
+                }
+            }
+            
+            if (isKnownZone) {
+                if (fallbackMarkers.has(normalizedLoc)) {
+                    regionMap.removeLayer(fallbackMarkers.get(normalizedLoc));
+                    fallbackMarkers.delete(normalizedLoc);
+                }
+            } else {
+                refreshFallbackMarker(location);
+            }
+        }
+
+        function refreshDistrict(districtName) {
+            const name = canonicalDistrictName(districtName) || normalizeDistrictName(districtName);
+            
+            if (cityDistrictLayers.has(name)) {
+                const layer = cityDistrictLayers.get(name);
+                const style = styleForDistrict(name, true);
+                layer.setStyle(style);
+                const path = layer.getElement && layer.getElement();
+                if (path) {
+                    path.classList.toggle('district-pulse-yellow', style.fillColor === '#ffea00');
+                    path.classList.toggle('district-pulse-red', style.fillColor === '#ff0033');
+                }
+            }
+            if (regionDistrictLayers.has(name)) {
+                const layer = regionDistrictLayers.get(name);
+                const style = styleForDistrict(name, false);
+                layer.setStyle(style);
+                const path = layer.getElement && layer.getElement();
+                if (path) {
+                    path.classList.toggle('district-pulse-yellow', style.fillColor === '#ffea00');
+                    path.classList.toggle('district-pulse-red', style.fillColor === '#ff0033');
+                }
+            }
+        }
+
+        function refreshMicrodistrict(location) {
+            const name = canonicalMicrodistrictName(location);
+            const layers = microdistrictLayers.get(normalizeDistrictName(name));
+            if (!layers) return;
+            
+            const style = styleForMicrodistrict(name);
+            layers.forEach(layer => {
+                layer.setStyle(style);
+                const isPointMarker = layer instanceof L.CircleMarker;
+                if (isPointMarker && layer.getTooltip()) {
+                    const key = normalizeDistrictName(name);
+                    if (style.fillOpacity > 0) {
+                        layer.setTooltipContent(`${name.toLocaleUpperCase('uk')} // ACTIVE`);
+                        layer.openTooltip();
+                    } else {
+                        layer.setTooltipContent(name.toLocaleUpperCase('uk'));
+                        if (!permanentMicrodistrictLabels.has(key)) layer.closeTooltip();
+                    }
+                }
+                const path = layer.getElement && layer.getElement();
+                if (path) {
+                    path.classList.toggle('district-pulse-yellow', !isPointMarker && style.fillColor === '#ffea00');
+                    path.classList.toggle('district-pulse-red', !isPointMarker && style.fillColor === '#ff0033');
+                    if (isPointMarker && style.fillOpacity > 0) {
+                        path.style.filter = `drop-shadow(0 0 5px ${style.fillColor}) drop-shadow(0 0 12px ${style.fillColor})`;
+                        layer.bringToFront();
+                    } else if (isPointMarker) { path.style.filter = ''; }
+                }
+            });
+        }
+
+        function expireThreatLocally(id, expectedExpiry) {
+            const threat = activeThreats.get(id);
+            if (!threat || threat.expires_at !== expectedExpiry) return;
+            const remaining = Date.parse(expectedExpiry) - Date.now();
+            if (remaining > 0) {
+                threatExpiryTimers.set(id, setTimeout(() => expireThreatLocally(id, expectedExpiry), Math.min(remaining, 2147000000)));
+                return;
+            }
+            activeThreats.delete(id);
+            threatExpiryTimers.delete(id);
+            refreshLocation(threat.location);
+        }
+
+        function scheduleThreatExpiry(threat) {
+            const id = String(threat.id);
+            if (threatExpiryTimers.has(id)) clearTimeout(threatExpiryTimers.get(id));
+            threatExpiryTimers.delete(id);
+            if (!threat.expires_at || !Number.isFinite(Date.parse(threat.expires_at))) return;
+            expireThreatLocally(id, threat.expires_at);
+        }
+
+        function applyThreat(threat) {
+            if (!threat || threat.id == null) return;
+            const id = String(threat.id);
+            if (threat.expires_at && Date.parse(threat.expires_at) <= Date.now()) { removeThreat(threat); return; }
+            activeThreats.set(id, threat);
+            refreshLocation(threat.location);
+            scheduleThreatExpiry(threat);
+        }
+
+        function removeThreat(threat) {
+            if (!threat || threat.id == null) return;
+            const id = String(threat.id);
+            const prev = activeThreats.get(id);
+            if (threatExpiryTimers.has(id)) clearTimeout(threatExpiryTimers.get(id));
+            threatExpiryTimers.delete(id);
+            activeThreats.delete(id);
+            refreshLocation(threat.location || (prev && prev.location));
+        }
+
+        function collectPolygonRings(geometry) {
+            if (!geometry) return [];
+            if (geometry.type === 'Polygon') return geometry.coordinates || [];
+            if (geometry.type === 'MultiPolygon') return (geometry.coordinates || []).flat();
+            return [];
+        }
+        function edgeKey(start, end) {
+            const pointKey = p => `${Number(p[0]).toFixed(7)},${Number(p[1]).toFixed(7)}`;
+            const a = pointKey(start), b = pointKey(end);
+            return a < b ? `${a}|${b}` : `${b}|${a}`;
+        }
+        function createBoundaryLines(features) {
+            const edges = new Map();
+            for (const feature of features) {
+                for (const ring of collectPolygonRings(feature.geometry)) {
+                    for (let index = 0; index < ring.length - 1; index += 1) {
+                        const start = ring[index], end = ring[index + 1];
+                        if (start[0] === end[0] && start[1] === end[1]) continue;
+                        const key = edgeKey(start, end);
+                        const edge = edges.get(key);
+                        if (edge) { edge.count += 1; } else { edges.set(key, { count: 1, coordinates: [start, end] }); }
+                    }
+                }
+            }
+            const outer = [], seams = [];
+            for (const edge of edges.values()) { (edge.count === 1 ? outer : seams).push(edge.coordinates); }
+            return { outer, seams };
+        }
+
+        function pointInRing(point, ring) {
+            let inside = false;
+            for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+                const crosses = (ring[i][1] > point[1]) !== (ring[j][1] > point[1]) && point[0] < ((ring[j][0] - ring[i][0]) * (point[1] - ring[i][1])) / (ring[j][1] - ring[i][1]) + ring[i][0];
+                if (crosses) inside = !inside;
+            }
+            return inside;
+        }
+        function pointInDistrict(point, geometry) {
+            const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.type === 'MultiPolygon' ? geometry.coordinates : [];
+            return polygons.some(p => pointInRing(point, p[0]) && !p.slice(1).some(hole => pointInRing(point, hole)));
+        }
+        function ringCentroid(ring) {
+            let twiceArea = 0, lonTotal = 0, latTotal = 0;
+            for (let i = 0; i < ring.length - 1; i += 1) {
+                const cross = ring[i][0] * ring[i+1][1] - ring[i+1][0] * ring[i][1];
+                twiceArea += cross; lonTotal += (ring[i][0] + ring[i+1][0]) * cross; latTotal += (ring[i][1] + ring[i+1][1]) * cross;
+            }
+            return twiceArea ? [lonTotal / (3 * twiceArea), latTotal / (3 * twiceArea)] : ring[0];
+        }
+        function getFeatureRepresentativePoints(feature) {
+            const g = feature.geometry;
+            if (g?.type === 'Point') return [g.coordinates];
+            if (g?.type === 'Polygon') return [ringCentroid(g.coordinates[0])];
+            if (g?.type === 'MultiPolygon') return g.coordinates.map(p => ringCentroid(p[0]));
+            return [];
+        }
+
+        function buildMicrodistrictParentIndex(microdistrictFeatures, cityFeatures) {
+            microdistrictParentDistricts.clear();
+            for (const feature of microdistrictFeatures) {
+                const points = getFeatureRepresentativePoints(feature);
+                const name = feature.properties && feature.properties.name;
+                if (!points.length || !name) continue;
+                const key = normalizeDistrictName(canonicalMicrodistrictName(name));
+                const parents = cityFeatures.filter(district => points.some(point => pointInDistrict(point, district.geometry)))
+                    .map(district => canonicalDistrictName(district.properties && district.properties.name)).filter(Boolean);
+                if (!parents.length) continue;
+                if (!microdistrictParentDistricts.has(key)) microdistrictParentDistricts.set(key, new Set());
+                parents.forEach(parent => microdistrictParentDistricts.get(key).add(parent));
+            }
+        }
+
+        async function loadDistricts() {
+            const response = await fetch('./districts.geojson?v=' + Date.now());
+            if (!response.ok) throw new Error('Failed to load districts.geojson');
+            const geojson = await response.json();
+            
+            const cityFeatures = [];
+            const regionFeatures = [];
+            const microdistrictFeatures = [];
+            
+            for (const feature of geojson.features) {
+                const props = feature.properties || {};
+                const rawName = props.name || '';
+                const isCityDistrict = cityDistrictNames.includes(canonicalDistrictName(rawName));
+
+                if (props.feature_type === 'microdistrict' || (props.place && !isCityDistrict)) {
+                    microdistrictFeatures.push(feature);
+                } else if (isCityDistrict) {
+                    cityFeatures.push(feature);
+                } else if (props.feature_type === 'district' || props.feature_type === 'city') {
+                    regionFeatures.push(feature);
+                }
+            }
+            
+            buildMicrodistrictParentIndex(microdistrictFeatures, cityFeatures);
+
+            const cityBoundaries = createBoundaryLines(cityFeatures);
+            L.geoJSON(cityFeatures, {
+                style: baseDistrictStyle,
+                onEachFeature(feature, layer) {
+                    const districtName = canonicalDistrictName(feature.properties.name);
+                    if (!districtName) return;
+                    cityDistrictLayers.set(districtName, layer);
+                    
+                    const anchor = layer.getBounds().getCenter();
+                    const marker = L.marker(anchor, { icon: L.divIcon({ className: 'district-label-marker', html: `<div class="district-name-label">${districtName.toLocaleUpperCase('uk')}</div>`, iconSize: [170, 30], iconAnchor: [85, 15] }), interactive: false, keyboard: false }).addTo(cityMap);
+                    const anchorMarker = L.circleMarker(anchor, { radius: 2, className: 'district-anchor', interactive: false, fillColor: '#8bdce0', color: '#8bdce0', weight: 1, fillOpacity: 1 }).addTo(cityMap);
+                    const leader = L.polyline([anchor, anchor], { color: '#51a0a9', weight: 0.8, opacity: 0.72, interactive: false, className: 'district-leader' }).addTo(cityMap);
+                    districtLabelRecords.push({ anchor, offset: labelOffsets[districtName] || [80, 40], marker, anchorMarker, leader });
+                }
+            }).addTo(cityMap);
+            
+            if (cityBoundaries.seams.length) L.geoJSON({ type: 'Feature', geometry: { type: 'MultiLineString', coordinates: cityBoundaries.seams } }, { style: districtSeamStyle }).addTo(cityMap);
+            if (cityBoundaries.outer.length) L.geoJSON({ type: 'Feature', geometry: { type: 'MultiLineString', coordinates: cityBoundaries.outer } }, { style: cityBoundaryStyle }).addTo(cityMap);
+
+            cityBounds = L.geoJSON(cityFeatures).getBounds();
+
+            const allRegionFeatures = [...cityFeatures, ...regionFeatures];
+            regionDistrictGeometries.clear();
+            for (const feature of allRegionFeatures) {
+                const name = canonicalDistrictName(feature.properties && feature.properties.name)
+                    || normalizeDistrictName(feature.properties && feature.properties.name);
+                if (!regionDistrictGeometries.has(name)) regionDistrictGeometries.set(name, []);
+                regionDistrictGeometries.get(name).push(feature.geometry);
+            }
+            L.geoJSON(allRegionFeatures, {
+                style: baseRegionStyle,
+                onEachFeature(feature, layer) {
+                    const name = feature.properties.name;
+                    const canonical = canonicalDistrictName(name) || normalizeDistrictName(name);
+                    regionDistrictLayers.set(canonical, layer);
+                    layer.bindTooltip(name.toLocaleUpperCase('uk'), { className: 'microdistrict-label', direction: 'center' });
+                }
+            }).addTo(regionMap);
+            
+            regionBounds = L.geoJSON(allRegionFeatures).getBounds();
+
+            if (microdistrictFeatures.length) {
+                L.geoJSON(microdistrictFeatures, {
+                    style: microdistrictBaseStyle,
+                    pointToLayer(f, latlng) { return L.circleMarker(latlng, { ...microdistrictBaseStyle, color: '#a8c0c4', fillColor: '#a8c0c4', fillOpacity: 0.8, radius: 3, weight: 1, interactive: true }); },
+                    onEachFeature(feature, layer) {
+                        const name = canonicalMicrodistrictName(feature.properties.name);
+                        const key = normalizeDistrictName(name);
+                        if (!microdistrictLayers.has(key)) microdistrictLayers.set(key, []);
+                        microdistrictLayers.get(key).push(layer);
+                        layer.bindTooltip(name.toLocaleUpperCase('uk'), { permanent: permanentMicrodistrictLabels.has(key), direction: 'center', className: 'microdistrict-label', interactive: true });
+                    }
+                }).addTo(cityMap);
+            }
+
+            fitMapsToViewport();
+            cityDistrictLayers.forEach((layer, name) => layer.setStyle(styleForDistrict(name, true)));
+            regionDistrictLayers.forEach((layer, name) => layer.setStyle(styleForDistrict(name, false)));
+        }
+
+        async function loadRegionOverview() {
+            try {
+                const response = await fetch('./oblast.geojson');
+                const geojson = await response.json();
+                L.geoJSON(geojson, { style: { color: '#3d5c66', weight: 1.5, opacity: 0.5, dashArray: '5, 10', fillColor: 'transparent', interactive: false } }).addTo(regionMap);
+            } catch (err) {}
+        }
+
+        const { supabaseUrl, supabaseKey } = window.APP_CONFIG || {};
+        if (!supabaseUrl || !supabaseKey) {
+            throw new Error('Supabase client configuration is missing. Set build environment variables and rebuild.');
+        }
+        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        let threatReconciliationInProgress = false;
+        async function loadThreats() {
+            if (threatReconciliationInProgress) return;
+            threatReconciliationInProgress = true;
+            try {
+                const { data, error } = await supabaseClient.from('active_threats').select('*');
+                if (error) throw error;
+                const threats = (data || []).filter(t => !t.expires_at || Date.parse(t.expires_at) > Date.now());
+                const fetchedIds = new Set(threats.map(t => String(t.id)));
+                for (const [id, threat] of activeThreats) { if (!fetchedIds.has(id)) removeThreat(threat); }
+                threats.forEach(t => applyThreat(t));
+            } finally {
+                threatReconciliationInProgress = false;
+            }
+        }
+
+        function subscribeToThreats() {
+            return new Promise((resolve, reject) => {
+                supabaseClient.channel('public:active_threats')
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'active_threats' }, payload => applyThreat(payload.new))
+                    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'active_threats' }, payload => removeThreat(payload.old))
+                    .subscribe(status => {
+                        realtimeStatus.textContent = status;
+                        realtimeStatus.classList.toggle('is-online', status === 'SUBSCRIBED');
+                        realtimeStatus.classList.toggle('is-error', status === 'CHANNEL_ERROR' || status === 'TIMED_OUT');
+                        if (status === 'SUBSCRIBED') resolve();
+                        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') reject();
+                    });
+            });
+        }
+
+        async function startMap() {
+            try {
+                await loadDistricts();
+                await loadRegionOverview();
+                await subscribeToThreats();
+                await loadThreats();
+                window.setInterval(() => loadThreats().catch(()=>{}), 5000);
+            } catch (error) {
+                realtimeStatus.textContent = 'ERROR';
+                realtimeStatus.classList.remove('is-online');
+                realtimeStatus.classList.add('is-error');
+            }
+        }
+
+        window.addEventListener('resize', fitMapsToViewport);
+        startMap();
+    </script>
+</body>
+</html>
