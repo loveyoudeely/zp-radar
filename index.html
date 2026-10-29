@@ -86,6 +86,17 @@
             box-shadow: 0 2px 8px #0008;
         }
         .microdistrict-labels-hidden .microdistrict-label { display: none; }
+        .radar-label {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            color: #88c0d0;
+            text-shadow: 0 0 5px #88c0d0;
+            font-weight: bold;
+            font-size: 10px;
+            text-align: center;
+        }
+        .radar-label::before, .radar-label::after { display: none !important; }
         .screen-frame {
             position: absolute;
             z-index: 850;
@@ -151,24 +162,7 @@
         }
         .admin-link:hover { background: #62d6c524; }
         
-        .district-name-label {
-            display: block;
-            color: #c8e2e5;
-            background: linear-gradient(110deg, rgba(8, 15, 21, 0.96), rgba(13, 26, 32, 0.9));
-            border: 1px solid rgba(93, 153, 161, 0.5);
-            border-left: 2px solid #53aab1;
-            border-radius: 3px;
-            padding: 6px 9px;
-            font: 600 10px/1.2 Consolas, "Courier New", monospace;
-            letter-spacing: 0.08em;
-            text-shadow: 0 0 8px #5dd8e044;
-            white-space: nowrap;
-            box-shadow: 0 4px 14px #0008, inset 0 0 12px #50c8d10a;
-            pointer-events: none;
-        }
-        .district-label-marker, .district-label-marker div { border: 0; background: transparent; }
         .district-leader { color: #51a0a9; opacity: .72; filter: drop-shadow(0 0 2px #42d1d440); }
-        .district-anchor { fill: #8bdce0; fill-opacity: .95; stroke: #0a1118; stroke-width: 2; filter: drop-shadow(0 0 5px #60e4e8); }
         
         .city-boundary-glow { filter: drop-shadow(0 0 3px #ff243dcc) drop-shadow(0 0 9px #ff102a99); }
         
@@ -294,22 +288,11 @@
         const realtimeStatus = document.getElementById('realtime-status');
         const localClock = document.getElementById('local-clock');
         
-        const labelOffsets = {
-            'Дніпровський': [-105, -62],
-            'Хортицький': [-96, 54],
-            'Комунарський': [105, 58],
-            'Шевченківський': [112, -55],
-            'Олександрівський': [92, 28],
-            'Вознесенівський': [-8, -91],
-            'Заводський': [-102, -18]
-        };
-
         const cityDistrictNames = [
             'Дніпровський', 'Хортицький', 'Комунарський', 'Шевченківський',
             'Олександрівський', 'Вознесенівський', 'Заводський'
         ];
 
-        const districtLabelRecords = [];
         let cityBounds = null;
         let regionBounds = null;
 
@@ -317,7 +300,6 @@
             if (cityBounds) {
                 cityMap.invalidateSize({ pan: false });
                 cityMap.fitBounds(cityBounds, { paddingTopLeft: [90, 90], paddingBottomRight: [90, 90], animate: false });
-                positionDistrictLabels();
             }
             if (regionBounds) {
                 regionMap.invalidateSize({ pan: false });
@@ -331,24 +313,6 @@
             localClock.textContent = new Intl.DateTimeFormat('uk-UA', {
                 hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
             }).format(new Date());
-        }
-
-        function positionDistrictLabels() {
-            const scale = 1;
-            for (const record of districtLabelRecords) {
-                const anchorPoint = cityMap.latLngToLayerPoint(record.anchor);
-                const targetPoint = anchorPoint.add(L.point(record.offset[0] * scale, record.offset[1] * scale));
-                const halfLabelWidth = 85;
-                targetPoint.x = Math.max(halfLabelWidth, Math.min(cityMap.getSize().x - halfLabelWidth, targetPoint.x));
-                const target = cityMap.layerPointToLatLng(targetPoint);
-                const delta = targetPoint.subtract(anchorPoint);
-                const length = Math.hypot(delta.x, delta.y);
-                const lineLength = Math.max(0, length - 84);
-                const lineEnd = length ? anchorPoint.add(delta.multiplyBy(lineLength / length)) : anchorPoint;
-                record.marker.setLatLng(target);
-                record.anchorMarker.setLatLng(record.anchor);
-                record.leader.setLatLngs([record.anchor, cityMap.layerPointToLatLng(lineEnd)]);
-            }
         }
 
         window.setInterval(updateClock, 1000);
@@ -757,12 +721,11 @@
                     const districtName = canonicalDistrictName(feature.properties.name);
                     if (!districtName) return;
                     cityDistrictLayers.set(districtName, layer);
-                    
-                    const anchor = layer.getBounds().getCenter();
-                    const marker = L.marker(anchor, { icon: L.divIcon({ className: 'district-label-marker', html: `<div class="district-name-label">${displayDistrictName(districtName).toLocaleUpperCase('uk')}</div>`, iconSize: [170, 30], iconAnchor: [85, 15] }), interactive: false, keyboard: false }).addTo(cityMap);
-                    const anchorMarker = L.circleMarker(anchor, { radius: 2, className: 'district-anchor', interactive: false, fillColor: '#8bdce0', color: '#8bdce0', weight: 1, fillOpacity: 1 }).addTo(cityMap);
-                    const leader = L.polyline([anchor, anchor], { color: '#51a0a9', weight: 0.8, opacity: 0.72, interactive: false, className: 'district-leader' }).addTo(cityMap);
-                    districtLabelRecords.push({ anchor, offset: labelOffsets[districtName] || [80, 40], marker, anchorMarker, leader });
+                    layer.bindTooltip(displayDistrictName(districtName), {
+                        permanent: true,
+                        direction: 'center',
+                        className: 'radar-label'
+                    });
                 }
             }).addTo(cityMap);
             
