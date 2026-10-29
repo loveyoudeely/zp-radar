@@ -85,7 +85,6 @@
             white-space: nowrap;
             box-shadow: 0 2px 8px #0008;
         }
-        .microdistrict-labels-hidden .microdistrict-label { display: none; }
         .radar-label {
             background: transparent !important;
             border: none !important;
@@ -322,7 +321,7 @@
         const baseRegionStyle = { color: '#3d5c66', weight: 1.2, opacity: 0.8, dashArray: '4, 6', fillColor: '#52767a', fillOpacity: 0 };
         const cityBoundaryStyle = { color: '#ff0000', weight: 3, opacity: 1, fillColor: '#ff0000', fillOpacity: 0, className: 'city-boundary-glow' };
         const districtSeamStyle = { color: '#52767a', weight: 1, opacity: 0.85, dashArray: '4, 4', interactive: false, className: 'district-leader' };
-        const microdistrictBaseStyle = { color: '#739298', weight: 1, opacity: 0.72, dashArray: '2, 5', fillColor: '#739298', fillOpacity: 0, radius: 3, interactive: true };
+        const microdistrictBaseStyle = { color: '#88c0d0', weight: 1, opacity: 0.5, dashArray: '3, 5', fillColor: '#88c0d0', fillOpacity: 0, radius: 3, interactive: true };
 
         function normalizeDistrictName(value) {
             return String(value || '').trim().toLocaleLowerCase('uk').replace(/\s+район$/u, '').replace(/\s+/gu, ' ');
@@ -375,22 +374,6 @@
         const microdistrictLayers = new Map();
         const microdistrictParentDistricts = new Map();
 
-        function updateMicrodistrictLabels() {
-            const showLabels = cityMap.getZoom() > 12;
-            cityMap.getContainer().classList.toggle('microdistrict-labels-hidden', !showLabels);
-            for (const layers of microdistrictLayers.values()) {
-                for (const layer of layers) {
-                    const tooltip = layer.getTooltip();
-                    if (!tooltip) continue;
-                    tooltip.options.permanent = showLabels;
-                    if (showLabels) layer.openTooltip();
-                    else layer.closeTooltip();
-                }
-            }
-        }
-
-        cityMap.on('zoomend', updateMicrodistrictLabels);
-        
         const activeThreats = new Map();
         const threatExpiryTimers = new Map();
         const fallbackMarkers = new Map(); 
@@ -574,7 +557,6 @@
                     } else if (isPointMarker) { path.style.filter = ''; }
                 }
             });
-            updateMicrodistrictLabels();
         }
 
         function expireThreatLocally(id, expectedExpiry) {
@@ -763,13 +745,17 @@
                         const key = normalizeDistrictName(name);
                         if (!microdistrictLayers.has(key)) microdistrictLayers.set(key, []);
                         microdistrictLayers.get(key).push(layer);
-                        layer.bindTooltip(name.toLocaleUpperCase('uk'), { direction: 'center', className: 'microdistrict-label', interactive: true });
+                        layer.bindTooltip(name.toLocaleUpperCase('uk'), {
+                            permanent: true,
+                            direction: 'center',
+                            className: 'radar-label',
+                            interactive: true
+                        });
                     }
                 }).addTo(cityMap);
             }
 
             fitMapsToViewport();
-            updateMicrodistrictLabels();
             cityDistrictLayers.forEach((layer, name) => layer.setStyle(styleForDistrict(name, true)));
             regionDistrictLayers.forEach((layer, name) => layer.setStyle(styleForDistrict(name, false)));
         }
