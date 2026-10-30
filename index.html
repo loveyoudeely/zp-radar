@@ -170,6 +170,16 @@
         
         .district-pulse-red { animation: district-red-pulse 1.4s ease-in-out infinite alternate; filter: drop-shadow(0 0 6px #ff174d66); }
         @keyframes district-red-pulse { from { fill-opacity: 0.25; } to { fill-opacity: 0.48; } }
+
+        .threat-pulse {
+            animation: pulse-danger 1s infinite alternate !important;
+            stroke: #ff0040 !important;
+            fill: #ff0040 !important;
+        }
+        @keyframes pulse-danger {
+            0% { fill-opacity: 0.1; filter: drop-shadow(0 0 5px #ff0040); }
+            100% { fill-opacity: 0.6; filter: drop-shadow(0 0 20px #ff0040); }
+        }
         
         .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #141414; color: #fff; border: 1px solid #333; box-shadow: 0 0 15px rgba(0, 0, 0, 0.9); }
         .corner-hud {
@@ -600,6 +610,7 @@
                 if (path) {
                     path.classList.toggle('district-pulse-yellow', style.fillColor === '#ffea00');
                     path.classList.toggle('district-pulse-red', style.fillColor === '#ff0033');
+                    path.classList.toggle('threat-pulse', style.fillColor === '#ff0033');
                 }
             }
             if (regionDistrictLayers.has(name)) {
@@ -610,6 +621,7 @@
                 if (path) {
                     path.classList.toggle('district-pulse-yellow', style.fillColor === '#ffea00');
                     path.classList.toggle('district-pulse-red', style.fillColor === '#ff0033');
+                    path.classList.toggle('threat-pulse', style.fillColor === '#ff0033');
                 }
             }
         }
@@ -634,6 +646,7 @@
                 if (path) {
                     path.classList.toggle('district-pulse-yellow', !isPointMarker && style.fillColor === '#ffea00');
                     path.classList.toggle('district-pulse-red', !isPointMarker && style.fillColor === '#ff0033');
+                    path.classList.toggle('threat-pulse', style.fillColor === '#ff0033');
                     if (isPointMarker && style.fillOpacity > 0) {
                         path.style.filter = `drop-shadow(0 0 5px ${style.fillColor}) drop-shadow(0 0 12px ${style.fillColor})`;
                         layer.bringToFront();
