@@ -630,12 +630,34 @@
             let isKnownZone = false;
 
             const canonicalLoc = canonicalDistrictName(location) || normalizedLoc;
-            if (cityDistrictLayers.has(canonicalLoc) || regionDistrictLayers.has(canonicalLoc)) {
-                refreshDistrict(canonicalLoc);
+            const normalizedDistrictName = normalizeDistrictName(canonicalLoc);
+            const allDistrictKeys = [...cityDistrictLayers.keys(), ...regionDistrictLayers.keys()];
+            const matchedDistrict = normalizedDistrictName
+                ? allDistrictKeys.find(key => {
+                    const normalizedKey = normalizeDistrictName(key);
+                    return normalizedKey.includes(normalizedDistrictName)
+                        || normalizedDistrictName.includes(normalizedKey);
+                })
+                : null;
+
+            const normalizedMicrodistrictName = normalizeDistrictName(microdistrictName);
+            const allMicroKeys = Array.from(microdistrictLayers.keys());
+            const matchedMicro = normalizedMicrodistrictName
+                ? allMicroKeys.find(key => key.includes(normalizedMicrodistrictName)
+                    || normalizedMicrodistrictName.includes(key))
+                : null;
+
+            console.log('=== ТЕСТ ПОДСВЕТКИ ===');
+            console.log('Пришло из базы:', location);
+            console.log('Найдено в районах карты:', matchedDistrict || 'Нет');
+            console.log('Найдено в микрорайонах карты:', matchedMicro || 'Нет');
+
+            if (matchedDistrict) {
+                refreshDistrict(matchedDistrict);
                 isKnownZone = true;
-            } else if (microdistrictLayers.has(normalizeDistrictName(microdistrictName))) {
-                refreshMicrodistrict(microdistrictName);
-                const parentDistricts = parentsForMicrodistrict(microdistrictName);
+            } else if (matchedMicro) {
+                refreshMicrodistrict(matchedMicro);
+                const parentDistricts = parentsForMicrodistrict(matchedMicro);
                 if (parentDistricts) parentDistricts.forEach(refreshDistrict);
                 isKnownZone = true;
             }
@@ -646,6 +668,7 @@
                     fallbackMarkers.delete(normalizedLoc);
                 }
             } else {
+                console.warn('Скрипт сдался, ставлю синий маркер для:', location);
                 refreshFallbackMarker(location);
             }
         }
@@ -680,11 +703,12 @@
         }
 
         function refreshMicrodistrict(location) {
-            const name = canonicalMicrodistrictName(location);
-            const key = normalizeDistrictName(name);
+            const key = normalizeDistrictName(canonicalMicrodistrictName(location));
             const layers = microdistrictLayers.get(key)
-                || (window.mapLayers.microdistricts[name] ? [window.mapLayers.microdistricts[name]] : []);
+                || (window.mapLayers.microdistricts[location] ? [window.mapLayers.microdistricts[location]] : []);
             if (!layers.length) return;
+            const featureName = layers[0].feature?.properties?.name;
+            const name = canonicalMicrodistrictName(featureName || location);
             
             const style = styleForMicrodistrict(name);
             layers.forEach(layer => {
