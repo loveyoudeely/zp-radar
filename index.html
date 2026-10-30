@@ -257,6 +257,39 @@
                 border-right: 0;
                 border-bottom: 2px solid #1a1a2e;
             }
+            .map-hud {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                min-width: 0;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 8px;
+                padding: 10px;
+            }
+            .map-hud-copy { flex: 1 1 180px; }
+            .map-hud-title { white-space: normal; }
+            .admin-link { margin-left: 0; }
+            .panel-title {
+                top: 10px;
+                right: 10px;
+                padding: 6px 8px;
+                font-size: 9px;
+            }
+            .corner-hud {
+                bottom: 10px;
+                display: flex;
+                max-width: calc(50% - 16px);
+                flex-direction: column;
+                align-items: center;
+                gap: 5px;
+                padding: 8px;
+                font-size: 7px;
+                text-align: center;
+            }
+            .corner-hud > div { width: 100%; }
+            .hud-left { left: 8px; }
+            .hud-right { right: 8px; }
         }
     </style>
 </head>
@@ -325,6 +358,16 @@
             touchZoom: true
         });
         const regionMap = L.map('region-map', { ...mapOptions, center: [47.3463, 35.9905], zoom: 7, minZoom: 6, maxZoom: 12 });
+
+        window.setTimeout(() => {
+            cityMap.invalidateSize({ pan: false });
+            regionMap.invalidateSize({ pan: false });
+            if (window.innerWidth <= 768) {
+                if (!cityBounds) cityMap.setZoom(10);
+                if (!regionBounds) regionMap.setZoom(7);
+            }
+            fitMapsToViewport();
+        }, 500);
 
         [cityMap, regionMap].forEach(map => {
             map.dragging.disable();
