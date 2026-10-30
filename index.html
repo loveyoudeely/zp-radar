@@ -364,7 +364,10 @@
         });
         function canonicalMicrodistrictName(value) {
             const normalized = normalizeDistrictName(value);
-            if (/^\d+-й південний мікрорайон$/u.test(normalized)) return 'Південний';
+            const southName = normalized.match(/^([1-5])-й південний(?: мікрорайон)?$/u);
+            if (southName) return 'Південний';
+            const shevchenkivskyiName = normalized.match(/^([1-3])-й шевченківський(?: мікрорайон)?$/u);
+            if (shevchenkivskyiName) return `${shevchenkivskyiName[1]}-й Шевченківський мікрорайон`;
             return microdistrictAliases.get(normalized) || String(value || '').trim();
         }
         const majorMicrodistrictNames = new Set([
@@ -379,15 +382,74 @@
             'Старе Місто',
             'Космічний',
             'Піски', 'Пески', 'Південний', 'Южный',
+            '1-й Південний', '3-й Південний', '4-й Південний', '5-й Південний',
             '1-й Південний мікрорайон', '3-й Південний мікрорайон',
             '4-й Південний мікрорайон', '5-й Південний мікрорайон',
             'Бабурка',
+            '1-й Шевченківський', '2-й Шевченківський', '3-й Шевченківський',
             '1-й Шевченківський мікрорайон',
             '2-й Шевченківський мікрорайон',
             '3-й Шевченківський мікрорайон',
             'Зелений Яр',
             'Димитрова', 'Селище ДД (Дніпро-Донбас)', 'Селище ДД (Димитрова)'
         ].map(normalizeDistrictName));
+        const microdistrictFeatureCollection = {
+            type: 'FeatureCollection',
+            features: [
+                { type: 'Feature', properties: { name: 'Тепличне' }, geometry: { type: 'Point', coordinates: [35.2692, 47.87258] } },
+                { type: 'Feature', properties: { name: 'Фінські' }, geometry: { type: 'Point', coordinates: [35.2781849, 47.8545501] } },
+                { type: 'Feature', properties: { name: 'Військове містечко' }, geometry: { type: 'Point', coordinates: [35.2860888, 47.8557686] } },
+                { type: 'Feature', properties: { name: 'Леваневського селище' }, geometry: { type: 'Point', coordinates: [35.264967, 47.8556216] } },
+                { type: 'Feature', properties: { name: 'Селище Садоводів' }, geometry: { type: 'Point', coordinates: [35.0970515, 47.8309051] } },
+                { type: 'Feature', properties: { name: 'Наукове Містечко' }, geometry: { type: 'Point', coordinates: [35.0809128, 47.8365025] } },
+                { type: 'Feature', properties: { name: '4-й Південний' }, geometry: { type: 'Point', coordinates: [35.1898815, 47.7735552] } },
+                { type: 'Feature', properties: { name: '3-й Південний' }, geometry: { type: 'Point', coordinates: [35.1794623, 47.7778362] } },
+                { type: 'Feature', properties: { name: '1-й Південний' }, geometry: { type: 'Point', coordinates: [35.1789744, 47.7833218] } },
+                { type: 'Feature', properties: { name: 'Дослідна Станція' }, geometry: { type: 'Point', coordinates: [35.2129301, 47.7646856] } },
+                { type: 'Feature', properties: { name: 'Космічний' }, geometry: { type: 'Point', coordinates: [35.2223054, 47.7821916] } },
+                { type: 'Feature', properties: { name: 'Торпеда' }, geometry: { type: 'Point', coordinates: [35.1994594, 47.8025576] } },
+                { type: 'Feature', properties: { name: 'Мирне' }, geometry: { type: 'Point', coordinates: [35.2173185, 47.7952422] } },
+                { type: 'Feature', properties: { name: 'Мокрянка' }, geometry: { type: 'Point', coordinates: [35.2265012, 47.8132064] } },
+                { type: 'Feature', properties: { name: '3-й Шевченківський' }, geometry: { type: 'Point', coordinates: [35.2376018, 47.8549919] } },
+                { type: 'Feature', properties: { name: '2-й Шевченківський' }, geometry: { type: 'Point', coordinates: [35.2271004, 47.8467885] } },
+                { type: 'Feature', properties: { name: '1-й Шевченківський' }, geometry: { type: 'Point', coordinates: [35.2170343, 47.8392996] } },
+                { type: 'Feature', properties: { name: 'Зелений Яр' }, geometry: { type: 'Point', coordinates: [35.1843721, 47.8426929] } },
+                { type: 'Feature', properties: { name: 'Старе Місто' }, geometry: { type: 'Point', coordinates: [35.179516, 47.8122668] } },
+                { type: 'Feature', properties: { name: 'Соцмісто' }, geometry: { type: 'Point', coordinates: [35.100368, 47.8604077] } },
+                { type: 'Feature', properties: { name: 'Павло-Кічкас' }, geometry: { type: 'Point', coordinates: [35.14907, 47.8940635] } },
+                { type: 'Feature', properties: { name: 'Великий Луг' }, geometry: { type: 'Point', coordinates: [35.0940946, 47.9270146] } },
+                { type: 'Feature', properties: { name: 'Бородинський' }, geometry: { type: 'Point', coordinates: [35.0709425, 47.8908407] } },
+                { type: 'Feature', properties: { name: 'Півколо' }, geometry: { type: 'Point', coordinates: [35.0577592, 47.869266] } },
+                { type: 'Feature', properties: { name: 'Осипенківський' }, geometry: { type: 'Point', coordinates: [35.0152975, 47.8838937] } },
+                { type: 'Feature', properties: { name: 'Верхня Хортиця' }, geometry: { type: 'Point', coordinates: [35.0034136, 47.8605007] } },
+                { type: 'Feature', properties: { name: 'Бабурка' }, geometry: { type: 'Point', coordinates: [35.0433224, 47.8218155] } },
+                { type: 'Feature', properties: { name: 'Запоріжжя-Ліве' }, geometry: { type: 'Point', coordinates: [35.2205819, 47.8728594] } },
+                { type: 'Feature', properties: { name: 'Урочище Сагайдачного' }, geometry: { type: 'Point', coordinates: [35.090179, 47.8537589] } },
+                { type: 'Feature', properties: { name: 'Димитрова' }, geometry: { type: 'Point', coordinates: [35.2189345, 47.8308938] } },
+                { type: 'Feature', properties: { name: 'Житломасив' }, geometry: { type: 'Point', coordinates: [35.202368, 47.8279771] } },
+                { type: 'Feature', properties: { name: 'Міськпаливо' }, geometry: { type: 'Point', coordinates: [35.1946916, 47.8135297] } },
+                { type: 'Feature', properties: { name: 'Калантирівка' }, geometry: { type: 'Point', coordinates: [35.2012971, 47.8106815] } },
+                { type: 'Feature', properties: { name: 'Старе Південне' }, geometry: { type: 'Point', coordinates: [35.1974656, 47.7922043] } },
+                { type: 'Feature', properties: { name: 'Мостозагін' }, geometry: { type: 'Point', coordinates: [35.0701466, 47.8175785] } },
+                { type: 'Feature', properties: { name: 'Вознесенський' }, geometry: { type: 'Point', coordinates: [35.136008, 47.8359859] } },
+                { type: 'Feature', properties: { name: 'Селище Будівельників' }, geometry: { type: 'Point', coordinates: [35.2846331, 47.8378174] } },
+                { type: 'Feature', properties: { name: 'Високовольтне селище' }, geometry: { type: 'Point', coordinates: [35.1923218, 47.8553058] } },
+                { type: 'Feature', properties: { name: 'Селище ДД (Дніпро-Донбас)' }, geometry: { type: 'Point', coordinates: [35.2232557, 47.8641556] } },
+                { type: 'Feature', properties: { name: 'Тельмана' }, geometry: { type: 'Point', coordinates: [35.1653325, 47.834279] } },
+                { type: 'Feature', properties: { name: '5-й Південний' }, geometry: { type: 'Point', coordinates: [35.184294, 47.7718121] } },
+                { type: 'Feature', properties: { name: 'селище Старий Дніпро' }, geometry: { type: 'Point', coordinates: [35.0764548, 47.8238441] } },
+                { type: 'Feature', properties: { name: 'Селище Овочівників' }, geometry: { type: 'Point', coordinates: [35.1376035, 47.8123462] } },
+                { type: 'Feature', properties: { name: 'Слобідка' }, geometry: { type: 'Point', coordinates: [35.1643877, 47.8227217] } },
+                { type: 'Feature', properties: { name: 'Скворцова' }, geometry: { type: 'Point', coordinates: [35.2398864, 47.8998008] } },
+                { type: 'Feature', properties: { name: 'Підпорожнянка' }, geometry: { type: 'Point', coordinates: [35.1407596, 47.9175068] } },
+                { type: 'Feature', properties: { name: 'Селище Лісництво' }, geometry: { type: 'Point', coordinates: [35.0650658, 47.8390655] } },
+                { type: 'Feature', properties: { name: 'Друготравневе' }, geometry: { type: 'Point', coordinates: [35.2167148, 47.8060847] } },
+                { type: 'Feature', properties: { name: 'Миколаївка' }, geometry: { type: 'Point', coordinates: [35.20277, 47.7773409] } },
+                { type: 'Feature', properties: { name: '26 квартал' }, geometry: { type: 'Point', coordinates: [35.2056398, 47.8192062] } },
+                { type: 'Feature', properties: { name: 'Лахті' }, geometry: { type: 'Point', coordinates: [35.1618079, 47.8288456] } },
+                { type: 'Feature', properties: { name: 'Урочище Вирва' }, geometry: { type: 'Point', coordinates: [35.0481816, 47.8505255] } }
+            ]
+        };
 
         const cityDistrictLayers = new Map();
         const regionDistrictLayers = new Map();
@@ -699,23 +761,21 @@
             
             const cityFeatures = [];
             const regionFeatures = [];
-            const microdistrictFeatures = [];
             
             for (const feature of geojson.features) {
                 const props = feature.properties || {};
                 const rawName = props.name || '';
                 const isCityDistrict = cityDistrictNames.includes(canonicalDistrictName(rawName));
 
-                if (props.feature_type === 'microdistrict' || (props.place && !isCityDistrict)) {
-                    if (majorMicrodistrictNames.has(normalizeDistrictName(rawName))) {
-                        microdistrictFeatures.push(feature);
-                    }
-                } else if (isCityDistrict) {
+                if (isCityDistrict) {
                     cityFeatures.push(feature);
                 } else if (props.feature_type === 'district' || props.feature_type === 'city') {
                     regionFeatures.push(feature);
                 }
             }
+            const microdistrictFeatures = microdistrictFeatureCollection.features.filter(feature =>
+                majorMicrodistrictNames.has(normalizeDistrictName(feature.properties.name))
+            );
             
             buildMicrodistrictParentIndex(microdistrictFeatures, cityFeatures);
 
