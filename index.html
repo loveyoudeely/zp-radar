@@ -251,11 +251,18 @@
                 flex-direction: column;
             }
             #city-map, #region-map {
-                flex: 0 0 60vh;
+                flex: 0 0 44vh;
                 width: 100%;
-                height: 60vh;
+                height: 44vh;
+                max-height: 380px;
                 border-right: 0;
                 border-bottom: 2px solid #1a1a2e;
+            }
+            @supports (height: 1dvh) {
+                #city-map, #region-map {
+                    flex-basis: 44dvh;
+                    height: 44dvh;
+                }
             }
             .map-hud {
                 top: 10px;
@@ -399,7 +406,7 @@
             if (cityBounds) {
                 cityMap.invalidateSize({ pan: false });
                 const cityFitOptions = isMobile
-                    ? { padding: [20, 20], animate: false }
+                    ? { padding: [12, 12], animate: false }
                     : { paddingTopLeft: [90, 90], paddingBottomRight: [90, 90], animate: false };
                 cityMap.fitBounds(cityBounds, cityFitOptions);
             }
@@ -408,7 +415,7 @@
                 if (isMobile) {
                     regionMap.setMinZoom(6);
                     regionMap.setMaxZoom(12);
-                    regionMap.fitBounds(regionBounds, { padding: [20, 20], animate: false });
+                    regionMap.fitBounds(regionBounds, { padding: [12, 12], animate: false });
                 } else {
                     regionMap.fitBounds(regionBounds, { paddingTopLeft: [100, 40], paddingBottomRight: [40, 40], animate: false });
                     regionMap.setMinZoom(regionMap.getZoom());
