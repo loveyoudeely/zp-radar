@@ -373,7 +373,7 @@
             regionMap.invalidateSize({ pan: false });
             if (window.innerWidth <= 768) {
                 cityMap.setZoom(11);
-                regionMap.setZoom(7);
+                regionMap.setZoom(8);
             }
             fitMapsToViewport();
         }, 500);
@@ -413,7 +413,7 @@
                 if (isMobile) {
                     regionMap.setMinZoom(6);
                     regionMap.setMaxZoom(12);
-                    regionMap.setView(regionBounds.getCenter(), 7, { animate: false });
+                    regionMap.setView(regionBounds.getCenter(), 8, { animate: false });
                 } else {
                     regionMap.fitBounds(regionBounds, { paddingTopLeft: [100, 40], paddingBottomRight: [40, 40], animate: false });
                     regionMap.setMinZoom(regionMap.getZoom());
