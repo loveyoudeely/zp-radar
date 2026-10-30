@@ -674,30 +674,46 @@
         }
 
         function refreshDistrict(districtName) {
-            const name = canonicalDistrictName(districtName) || normalizeDistrictName(districtName);
-            
-            const cityLayer = window.mapLayers.districts[name] || cityDistrictLayers.get(name);
+            const name = districtName;
+
+            let isThreatActive = false;
+            activeThreats.forEach(threat => {
+                if (threat.location && (name.toLowerCase().includes(threat.location.toLowerCase()) || threat.location.toLowerCase().includes(name.toLowerCase()))) {
+                    isThreatActive = true;
+                }
+            });
+
+            const cityLayer = (window.mapLayers && window.mapLayers.districts[name]) || cityDistrictLayers.get(name);
             if (cityLayer) {
-                const layer = cityLayer;
-                const style = styleForDistrict(name, true);
-                layer.setStyle(style);
-                const path = layer.getElement && layer.getElement();
+                const style = { ...styleForDistrict(name, true) };
+                if (isThreatActive) {
+                    style.fillColor = '#ff0033';
+                    style.color = '#ff0033';
+                    style.fillOpacity = 0.5;
+                }
+                cityLayer.setStyle(style);
+
+                const path = cityLayer.getElement && cityLayer.getElement();
                 if (path) {
-                    path.classList.toggle('district-pulse-yellow', style.fillColor === '#ffea00');
-                    path.classList.toggle('district-pulse-red', style.fillColor === '#ff0033');
-                    path.classList.toggle('threat-pulse', style.fillColor === '#ff0033');
+                    path.classList.toggle('threat-pulse', isThreatActive);
+                    path.classList.toggle('district-pulse-red', isThreatActive);
                 }
             }
-            const regionLayer = window.mapLayers.regionDistricts[name] || regionDistrictLayers.get(name);
+
+            const regionLayer = (window.mapLayers && window.mapLayers.regionDistricts[name]) || regionDistrictLayers.get(name);
             if (regionLayer) {
-                const layer = regionLayer;
-                const style = styleForDistrict(name, false);
-                layer.setStyle(style);
-                const path = layer.getElement && layer.getElement();
+                const style = { ...styleForDistrict(name, false) };
+                if (isThreatActive) {
+                    style.fillColor = '#ff0033';
+                    style.color = '#ff0033';
+                    style.fillOpacity = 0.5;
+                }
+                regionLayer.setStyle(style);
+
+                const path = regionLayer.getElement && regionLayer.getElement();
                 if (path) {
-                    path.classList.toggle('district-pulse-yellow', style.fillColor === '#ffea00');
-                    path.classList.toggle('district-pulse-red', style.fillColor === '#ff0033');
-                    path.classList.toggle('threat-pulse', style.fillColor === '#ff0033');
+                    path.classList.toggle('threat-pulse', isThreatActive);
+                    path.classList.toggle('district-pulse-red', isThreatActive);
                 }
             }
         }
@@ -705,31 +721,42 @@
         function refreshMicrodistrict(location) {
             const key = normalizeDistrictName(canonicalMicrodistrictName(location));
             const layers = microdistrictLayers.get(key)
-                || (window.mapLayers.microdistricts[location] ? [window.mapLayers.microdistricts[location]] : []);
+                || (window.mapLayers && window.mapLayers.microdistricts[location] ? [window.mapLayers.microdistricts[location]] : []);
             if (!layers.length) return;
+
             const featureName = layers[0].feature?.properties?.name;
             const name = canonicalMicrodistrictName(featureName || location);
-            
-            const style = styleForMicrodistrict(name);
+
+            let isThreatActive = false;
+            activeThreats.forEach(threat => {
+                if (threat.location && (name.toLowerCase().includes(threat.location.toLowerCase()) || threat.location.toLowerCase().includes(name.toLowerCase()) || location.toLowerCase().includes(threat.location.toLowerCase()))) {
+                    isThreatActive = true;
+                }
+            });
+
+            const style = { ...styleForMicrodistrict(name) };
+            if (isThreatActive) {
+                style.fillColor = '#ff0033';
+                style.color = '#ff0033';
+                style.fillOpacity = 0.5;
+            }
+
             layers.forEach(layer => {
                 layer.setStyle(style);
                 const isPointMarker = layer instanceof L.CircleMarker;
                 if (isPointMarker && layer.getTooltip()) {
-                    if (style.fillOpacity > 0) {
-                        layer.setTooltipContent(`${name.toLocaleUpperCase('uk')} // ACTIVE`);
-                    } else {
-                        layer.setTooltipContent(name.toLocaleUpperCase('uk'));
-                    }
+                    layer.setTooltipContent(isThreatActive ? `${name.toLocaleUpperCase('uk')} // ACTIVE` : name.toLocaleUpperCase('uk'));
                 }
                 const path = layer.getElement && layer.getElement();
                 if (path) {
-                    path.classList.toggle('district-pulse-yellow', !isPointMarker && style.fillColor === '#ffea00');
-                    path.classList.toggle('district-pulse-red', !isPointMarker && style.fillColor === '#ff0033');
-                    path.classList.toggle('threat-pulse', style.fillColor === '#ff0033');
-                    if (isPointMarker && style.fillOpacity > 0) {
+                    path.classList.toggle('threat-pulse', isThreatActive);
+                    path.classList.toggle('district-pulse-red', isThreatActive && !isPointMarker);
+                    if (isPointMarker && isThreatActive) {
                         path.style.filter = `drop-shadow(0 0 5px ${style.fillColor}) drop-shadow(0 0 12px ${style.fillColor})`;
                         layer.bringToFront();
-                    } else if (isPointMarker) { path.style.filter = ''; }
+                    } else if (isPointMarker) {
+                        path.style.filter = '';
+                    }
                 }
             });
         }
