@@ -291,6 +291,15 @@
             .hud-left { left: 8px; }
             .hud-right { right: 8px; }
         }
+        path.leaflet-interactive {
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            filter: drop-shadow(0 0 2px rgba(255, 0, 51, 0.8));
+            transition: all 0.3s ease;
+        }
+        @media (max-width: 768px) {
+            path.leaflet-interactive { stroke-width: 2px !important; }
+        }
     </style>
 </head>
 <body>
@@ -363,8 +372,8 @@
             cityMap.invalidateSize({ pan: false });
             regionMap.invalidateSize({ pan: false });
             if (window.innerWidth <= 768) {
-                if (!cityBounds) cityMap.setZoom(11);
-                if (!regionBounds) regionMap.setZoom(9);
+                cityMap.setZoom(11);
+                regionMap.setZoom(7);
             }
             fitMapsToViewport();
         }, 500);
@@ -390,18 +399,26 @@
         let regionBounds = null;
 
         function fitMapsToViewport() {
+            const isMobile = window.innerWidth <= 768;
             if (cityBounds) {
                 cityMap.invalidateSize({ pan: false });
-                const cityFitOptions = window.innerWidth <= 768
+                const cityFitOptions = isMobile
                     ? { padding: [10, 10], animate: false }
                     : { paddingTopLeft: [90, 90], paddingBottomRight: [90, 90], animate: false };
                 cityMap.fitBounds(cityBounds, cityFitOptions);
+                if (isMobile) cityMap.setZoom(11, { animate: false });
             }
             if (regionBounds) {
                 regionMap.invalidateSize({ pan: false });
-                regionMap.fitBounds(regionBounds, { paddingTopLeft: [100, 40], paddingBottomRight: [40, 40], animate: false });
-                regionMap.setMinZoom(regionMap.getZoom());
-                regionMap.setMaxZoom(regionMap.getZoom());
+                if (isMobile) {
+                    regionMap.setMinZoom(6);
+                    regionMap.setMaxZoom(12);
+                    regionMap.setView(regionBounds.getCenter(), 7, { animate: false });
+                } else {
+                    regionMap.fitBounds(regionBounds, { paddingTopLeft: [100, 40], paddingBottomRight: [40, 40], animate: false });
+                    regionMap.setMinZoom(regionMap.getZoom());
+                    regionMap.setMaxZoom(regionMap.getZoom());
+                }
             }
         }
 
