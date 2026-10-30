@@ -738,21 +738,28 @@
 
             if (microdistrictFeatures.length) {
                 L.geoJSON(microdistrictFeatures, {
-                    style: microdistrictBaseStyle,
-                    pointToLayer(f, latlng) { return L.circleMarker(latlng, { ...microdistrictBaseStyle, color: '#a8c0c4', fillColor: '#a8c0c4', fillOpacity: 0.8, radius: 3, weight: 1, interactive: true }); },
-                    onEachFeature(feature, layer) {
-                        const name = canonicalMicrodistrictName(feature.properties.name);
-                        const key = normalizeDistrictName(name);
-                        if (!microdistrictLayers.has(key)) microdistrictLayers.set(key, []);
-                        microdistrictLayers.get(key).push(layer);
-                        layer.bindTooltip(name.toLocaleUpperCase('uk'), {
-                            permanent: true,
-                            direction: 'center',
-                            className: 'radar-label',
-                            interactive: true
-                        });
-                    }
-                }).addTo(cityMap);
+    // 1. Рисуем пунктирные границы
+    style: function (feature) {
+        return {
+            color: '#88c0d0',
+            weight: 1,
+            opacity: 0.5,
+            dashArray: '3, 5',
+            fillOpacity: 0
+        };
+    },
+    // 2. Добавляем всплывающие подсказки
+    onEachFeature: function (feature, layer) {
+        if (feature.properties && feature.properties.name) {
+            layer.bindTooltip(feature.properties.name, {
+                permanent: false, // Текст скрыт, появляется только при наведении/клике
+                direction: 'center',
+                className: 'radar-label'
+            });
+        }
+    }
+}).addTo(map);
+                
             }
 
             fitMapsToViewport();
