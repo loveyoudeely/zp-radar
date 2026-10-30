@@ -380,6 +380,39 @@
             if (shevchenkivskyiName) return `${shevchenkivskyiName[1]}-й Шевченківський мікрорайон`;
             return microdistrictAliases.get(normalized) || String(value || '').trim();
         }
+        const microToDistrict = Object.freeze({
+            'Бабурка': 'Хортицький',
+            'Павло-Кічкас': 'Заводський',
+            'Запоріжжя-Ліве': 'Заводський',
+            'Космічний': 'Комунарський',
+            'Дослідна Станція': 'Комунарський',
+            'Південний': 'Комунарський',
+            '1-й Південний': 'Комунарський',
+            '2-й Південний': 'Комунарський',
+            '3-й Південний': 'Комунарський',
+            '4-й Південний': 'Комунарський',
+            '5-й Південний': 'Комунарський',
+            'Піски': 'Комунарський',
+            'Бородинський': 'Дніпровський',
+            'Осипенківський': 'Дніпровський',
+            'Великий Луг': 'Дніпровський',
+            'Верхня Хортиця': 'Дніпровський',
+            'Соцмісто': 'Вознесенівський',
+            'Вознесенський': 'Вознесенівський',
+            'Старе Місто': 'Олександрівський',
+            '1-й Шевченківський': 'Шевченківський',
+            '2-й Шевченківський': 'Шевченківський',
+            '3-й Шевченківський': 'Шевченківський',
+            'Зелений Яр': 'Шевченківський',
+            'Димитрова': 'Шевченківський',
+            'Селище ДД (Дніпро-Донбас)': 'Шевченківський'
+        });
+        const microdistrictParentOverrides = new Map(
+            Object.entries(microToDistrict).map(([microdistrict, district]) => [
+                normalizeDistrictName(canonicalMicrodistrictName(microdistrict)),
+                canonicalDistrictName(district)
+            ])
+        );
         const majorMicrodistrictNames = new Set([
             'Бородінський', 'Бородинський',
             'Осипенківський',
@@ -460,6 +493,11 @@
             ]
         };
 
+        window.mapLayers = {
+            districts: Object.create(null),
+            regionDistricts: Object.create(null),
+            microdistricts: Object.create(null)
+        };
         const cityDistrictLayers = new Map();
         const regionDistrictLayers = new Map();
         const regionDistrictGeometries = new Map();
@@ -498,7 +536,17 @@
 
         function microdistrictHasParent(location, districtName) {
             const key = normalizeDistrictName(canonicalMicrodistrictName(location));
-            return microdistrictParentDistricts.get(key)?.has(districtName) || false;
+            const configuredParent = microdistrictParentOverrides.get(key);
+            return configuredParent
+                ? configuredParent === (canonicalDistrictName(districtName) || normalizeDistrictName(districtName))
+                : microdistrictParentDistricts.get(key)?.has(districtName) || false;
+        }
+        function parentsForMicrodistrict(location) {
+            const key = normalizeDistrictName(canonicalMicrodistrictName(location));
+            const configuredParent = microdistrictParentOverrides.get(key);
+            return configuredParent
+                ? new Set([configuredParent])
+                : microdistrictParentDistricts.get(key);
         }
         function isMicrodistrictLocation(location) { return microdistrictLayers.has(normalizeDistrictName(canonicalMicrodistrictName(location))); }
 
@@ -551,7 +599,6 @@
                         .filter(threat => normalizeDistrictName(threat.location) === normalizedLoc);
                     if (!latestThreats.length || fallbackMarkers.has(normalizedLoc)) return;
 
-                    const pulseIcon = L.divIcon({ className: 'pulse-icon', html: '<div class="pulse"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
                     const latitude = Number(result.lat);
                     const longitude = Number(result.lon);
                     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
@@ -560,7 +607,14 @@
                         .some(geometry => pointInDistrict([longitude, latitude], geometry));
                     if (isInsideKnownBoundary) return;
 
-                    const marker = L.marker([latitude, longitude], { icon: pulseIcon })
+                    const marker = L.circleMarker([latitude, longitude], {
+                        radius: 10,
+                        color: '#ff0040',
+                        weight: 2,
+                        fillColor: '#ff0040',
+                        fillOpacity: 0.6,
+                        className: 'threat-pulse'
+                    })
                       .addTo(regionMap)
                       .bindTooltip(`${location.toLocaleUpperCase('uk')} (${latestThreats[0].threat_type || 'Загроза'})`, { direction: 'top', className: 'microdistrict-label', permanent: true, offset: [0, -10] });
                     fallbackMarkers.set(normalizedLoc, marker);
@@ -575,17 +629,15 @@
             const microdistrictName = canonicalMicrodistrictName(location);
             let isKnownZone = false;
 
-            if (microdistrictLayers.has(normalizeDistrictName(microdistrictName))) {
+            const canonicalLoc = canonicalDistrictName(location) || normalizedLoc;
+            if (cityDistrictLayers.has(canonicalLoc) || regionDistrictLayers.has(canonicalLoc)) {
+                refreshDistrict(canonicalLoc);
+                isKnownZone = true;
+            } else if (microdistrictLayers.has(normalizeDistrictName(microdistrictName))) {
                 refreshMicrodistrict(microdistrictName);
-                const parentDistricts = microdistrictParentDistricts.get(normalizeDistrictName(microdistrictName));
+                const parentDistricts = parentsForMicrodistrict(microdistrictName);
                 if (parentDistricts) parentDistricts.forEach(refreshDistrict);
                 isKnownZone = true;
-            } else {
-                const canonicalLoc = canonicalDistrictName(location) || normalizedLoc;
-                if (cityDistrictLayers.has(canonicalLoc) || regionDistrictLayers.has(canonicalLoc)) {
-                    refreshDistrict(canonicalLoc);
-                    isKnownZone = true;
-                }
             }
             
             if (isKnownZone) {
@@ -601,8 +653,9 @@
         function refreshDistrict(districtName) {
             const name = canonicalDistrictName(districtName) || normalizeDistrictName(districtName);
             
-            if (cityDistrictLayers.has(name)) {
-                const layer = cityDistrictLayers.get(name);
+            const cityLayer = window.mapLayers.districts[name] || cityDistrictLayers.get(name);
+            if (cityLayer) {
+                const layer = cityLayer;
                 const style = styleForDistrict(name, true);
                 layer.setStyle(style);
                 const path = layer.getElement && layer.getElement();
@@ -612,8 +665,9 @@
                     path.classList.toggle('threat-pulse', style.fillColor === '#ff0033');
                 }
             }
-            if (regionDistrictLayers.has(name)) {
-                const layer = regionDistrictLayers.get(name);
+            const regionLayer = window.mapLayers.regionDistricts[name] || regionDistrictLayers.get(name);
+            if (regionLayer) {
+                const layer = regionLayer;
                 const style = styleForDistrict(name, false);
                 layer.setStyle(style);
                 const path = layer.getElement && layer.getElement();
@@ -627,8 +681,10 @@
 
         function refreshMicrodistrict(location) {
             const name = canonicalMicrodistrictName(location);
-            const layers = microdistrictLayers.get(normalizeDistrictName(name));
-            if (!layers) return;
+            const key = normalizeDistrictName(name);
+            const layers = microdistrictLayers.get(key)
+                || (window.mapLayers.microdistricts[name] ? [window.mapLayers.microdistricts[name]] : []);
+            if (!layers.length) return;
             
             const style = styleForMicrodistrict(name);
             layers.forEach(layer => {
@@ -798,6 +854,8 @@
                     const districtName = canonicalDistrictName(feature.properties.name);
                     if (!districtName) return;
                     cityDistrictLayers.set(districtName, layer);
+                    window.mapLayers.districts[districtName] = layer;
+                    window.mapLayers.districts[feature.properties.name] = layer;
                     layer.bindTooltip(displayDistrictName(districtName), {
                         permanent: true,
                         direction: 'center',
@@ -825,6 +883,8 @@
                     const name = feature.properties.name;
                     const canonical = canonicalDistrictName(name) || normalizeDistrictName(name);
                     regionDistrictLayers.set(canonical, layer);
+                    window.mapLayers.regionDistricts[canonical] = layer;
+                    window.mapLayers.regionDistricts[name] = layer;
                     layer.bindTooltip(displayDistrictName(name).toLocaleUpperCase('uk'), { className: 'microdistrict-label', direction: 'center' });
                 }
             }).addTo(regionMap);
@@ -845,6 +905,8 @@
                         const key = normalizeDistrictName(name);
                         if (!microdistrictLayers.has(key)) microdistrictLayers.set(key, []);
                         microdistrictLayers.get(key).push(layer);
+                        window.mapLayers.microdistricts[feature.properties.name] = layer;
+                        if (!window.mapLayers.microdistricts[name]) window.mapLayers.microdistricts[name] = layer;
                         layer.bindTooltip(feature.properties.name, {
                             permanent: false,
                             direction: 'center',
