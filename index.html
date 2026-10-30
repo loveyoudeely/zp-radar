@@ -321,7 +321,7 @@
         const baseRegionStyle = { color: '#3d5c66', weight: 1.2, opacity: 0.8, dashArray: '4, 6', fillColor: '#52767a', fillOpacity: 0 };
         const cityBoundaryStyle = { color: '#ff0000', weight: 3, opacity: 1, fillColor: '#ff0000', fillOpacity: 0, className: 'city-boundary-glow' };
         const districtSeamStyle = { color: '#52767a', weight: 1, opacity: 0.85, dashArray: '4, 4', interactive: false, className: 'district-leader' };
-        const microdistrictBaseStyle = { color: '#88c0d0', weight: 1, opacity: 0.5, dashArray: '3, 5', fillColor: '#88c0d0', fillOpacity: 0, stroke: true, radius: 3, interactive: true };
+        const microdistrictBaseStyle = { color: '#88c0d0', weight: 1, opacity: 0.5, dashArray: '3, 5', fillColor: '#88c0d0', fillOpacity: 0, stroke: true, interactive: true };
 
         function normalizeDistrictName(value) {
             return String(value || '').trim().toLocaleLowerCase('uk').replace(/\s+район$/u, '').replace(/\s+/gu, ' ');
@@ -367,6 +367,27 @@
             if (/^\d+-й південний мікрорайон$/u.test(normalized)) return 'Південний';
             return microdistrictAliases.get(normalized) || String(value || '').trim();
         }
+        const majorMicrodistrictNames = new Set([
+            'Бородінський', 'Бородинський',
+            'Осипенківський',
+            'Великий Луг',
+            'Верхня Хортиця',
+            'Павло-Кічкас',
+            'Запоріжжя-Ліве',
+            'Соцмісто',
+            'Вознесенський', 'Вознесенка', 'Вознесенка (Центр)',
+            'Старе Місто',
+            'Космічний',
+            'Піски', 'Пески', 'Південний', 'Южный',
+            '1-й Південний мікрорайон', '3-й Південний мікрорайон',
+            '4-й Південний мікрорайон', '5-й Південний мікрорайон',
+            'Бабурка',
+            '1-й Шевченківський мікрорайон',
+            '2-й Шевченківський мікрорайон',
+            '3-й Шевченківський мікрорайон',
+            'Зелений Яр',
+            'Димитрова', 'Селище ДД (Дніпро-Донбас)', 'Селище ДД (Димитрова)'
+        ].map(normalizeDistrictName));
 
         const cityDistrictLayers = new Map();
         const regionDistrictLayers = new Map();
@@ -414,7 +435,7 @@
             const name = canonicalMicrodistrictName(microdistrictName);
             const threats = Array.from(activeThreats.values()).filter(threat => canonicalMicrodistrictName(threat.location) === name);
             const color = threatColor(threats);
-            if (color) return { ...microdistrictBaseStyle, color, fillColor: color, fillOpacity: 0.92, opacity: 1, weight: 2.5, radius: 10 };
+            if (color) return { ...microdistrictBaseStyle, color, fillColor: color, fillOpacity: 0.92, opacity: 1, weight: 2.5 };
             return microdistrictBaseStyle;
         }
 
@@ -686,7 +707,9 @@
                 const isCityDistrict = cityDistrictNames.includes(canonicalDistrictName(rawName));
 
                 if (props.feature_type === 'microdistrict' || (props.place && !isCityDistrict)) {
-                    microdistrictFeatures.push(feature);
+                    if (majorMicrodistrictNames.has(normalizeDistrictName(rawName))) {
+                        microdistrictFeatures.push(feature);
+                    }
                 } else if (isCityDistrict) {
                     cityFeatures.push(feature);
                 } else if (props.feature_type === 'district' || props.feature_type === 'city') {
@@ -736,31 +759,29 @@
             
             regionBounds = L.geoJSON(allRegionFeatures).getBounds();
 
-           if (microdistrictFeatures.length) {
-    const microLayer = L.geoJSON(microdistrictFeatures, {
-        style: function (feature) {
-            return {
-                color: '#88c0d0',
-                weight: 1,
-                opacity: 0.5,
-                dashArray: '3, 5',
-                fillOpacity: 0
-            };
-        },
-        onEachFeature: function (feature, layer) {
-            if (feature.properties && feature.properties.name) {
-                layer.bindTooltip(feature.properties.name, {
-                    permanent: false,
-                    direction: 'center',
-                    className: 'radar-label'
-                });
+            if (microdistrictFeatures.length) {
+                L.geoJSON(microdistrictFeatures, {
+                    style: microdistrictBaseStyle,
+                    pointToLayer(feature, latlng) {
+                        return L.circle(latlng, {
+                            ...microdistrictBaseStyle,
+                            radius: 600
+                        });
+                    },
+                    onEachFeature(feature, layer) {
+                        const name = canonicalMicrodistrictName(feature.properties.name);
+                        const key = normalizeDistrictName(name);
+                        if (!microdistrictLayers.has(key)) microdistrictLayers.set(key, []);
+                        microdistrictLayers.get(key).push(layer);
+                        layer.bindTooltip(feature.properties.name, {
+                            permanent: false,
+                            direction: 'center',
+                            className: 'radar-label',
+                            interactive: true
+                        });
+                    }
+                }).addTo(cityMap);
             }
-        }
-    }).addTo(map);
-    
-    // Вытягиваем микрорайоны на передний план
-    microLayer.bringToFront();
-}
             fitMapsToViewport();
             cityDistrictLayers.forEach((layer, name) => layer.setStyle(styleForDistrict(name, true)));
             regionDistrictLayers.forEach((layer, name) => layer.setStyle(styleForDistrict(name, false)));
