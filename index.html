@@ -369,12 +369,8 @@
         const regionMap = L.map('region-map', { ...mapOptions, center: [47.3463, 35.9905], zoom: 7, minZoom: 6, maxZoom: 12 });
 
         window.setTimeout(() => {
-            cityMap.invalidateSize({ pan: false });
-            regionMap.invalidateSize({ pan: false });
-            if (window.innerWidth <= 768) {
-                cityMap.setZoom(11);
-                regionMap.setZoom(8);
-            }
+            cityMap.invalidateSize();
+            regionMap.invalidateSize();
             fitMapsToViewport();
         }, 500);
 
@@ -403,17 +399,16 @@
             if (cityBounds) {
                 cityMap.invalidateSize({ pan: false });
                 const cityFitOptions = isMobile
-                    ? { padding: [10, 10], animate: false }
+                    ? { padding: [20, 20], animate: false }
                     : { paddingTopLeft: [90, 90], paddingBottomRight: [90, 90], animate: false };
                 cityMap.fitBounds(cityBounds, cityFitOptions);
-                if (isMobile) cityMap.setZoom(11, { animate: false });
             }
             if (regionBounds) {
                 regionMap.invalidateSize({ pan: false });
                 if (isMobile) {
                     regionMap.setMinZoom(6);
                     regionMap.setMaxZoom(12);
-                    regionMap.setView(regionBounds.getCenter(), 8, { animate: false });
+                    regionMap.fitBounds(regionBounds, { padding: [20, 20], animate: false });
                 } else {
                     regionMap.fitBounds(regionBounds, { paddingTopLeft: [100, 40], paddingBottomRight: [40, 40], animate: false });
                     regionMap.setMinZoom(regionMap.getZoom());
