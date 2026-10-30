@@ -15,7 +15,10 @@ const allowedChatIds = new Set(
         .map(chatId => chatId.trim())
         .filter(Boolean)
 );
-const threatLifetimeMinutes = 30;
+
+// Установлено время жизни угрозы 5 минут
+const threatLifetimeMinutes = 5;
+
 const cityDistrictNames = [
     'Дніпровський',
     'Хортицький',
@@ -25,7 +28,30 @@ const cityDistrictNames = [
     'Вознесенівський',
     'Заводський'
 ];
-const expectedZoneCount = 74;
+const cityMicrodistrictNames = [
+    'Бабурка',
+    'Павло-Кічкас',
+    'Запоріжжя-Ліве',
+    'Космічний',
+    'Дослідна Станція',
+    '1-й Південний',
+    '3-й Південний',
+    '4-й Південний',
+    '5-й Південний',
+    '1-й Шевченківський',
+    '2-й Шевченківський',
+    '3-й Шевченківський',
+    'Зелений Яр',
+    'Старе Місто',
+    'Соцмісто',
+    'Великий Луг',
+    'Бородинський',
+    'Осипенківський',
+    'Верхня Хортиця',
+    'Димитрова',
+    'Селище ДД (Дніпро-Донбас)',
+    'Вознесенський'
+];
 
 function normalizeZoneName(value) {
     return String(value || '').trim().toLocaleLowerCase('uk-UA').replace(/\s+/gu, ' ');
@@ -39,34 +65,35 @@ function loadAllowedZones() {
     }
 
     const allowedZones = new Map();
+    const cityDistrictNamesByNormalized = new Map(
+        cityDistrictNames.map(name => [normalizeZoneName(name), name])
+    );
     for (const feature of geojson.features) {
         const properties = feature.properties || {};
         const name = String(properties.name || '').trim();
-        const isCityDistrict = properties.feature_type === 'city'
-            && cityDistrictNames.some(cityName => normalizeZoneName(cityName) === normalizeZoneName(name));
-        if (
-            !name
-            || (properties.feature_type !== 'district' && !isCityDistrict)
-            || !['Polygon', 'MultiPolygon'].includes(feature.geometry?.type)
-        ) continue;
+        const canonicalCityDistrict = cityDistrictNamesByNormalized.get(normalizeZoneName(name));
+        if (!canonicalCityDistrict || !['Polygon', 'MultiPolygon'].includes(feature.geometry?.type)) continue;
+        allowedZones.set(normalizeZoneName(canonicalCityDistrict), canonicalCityDistrict);
+    }
 
+    const missingCityDistricts = cityDistrictNames.filter(name => !allowedZones.has(normalizeZoneName(name)));
+    if (missingCityDistricts.length) {
+        throw new Error(`В districts.geojson відсутні райони міста: ${missingCityDistricts.join(', ')}.`);
+    }
+
+    for (const name of [...cityMicrodistrictNames, 'Космічний']) {
         allowedZones.set(normalizeZoneName(name), name);
     }
 
-    const zones = Array.from(allowedZones.values()).sort((left, right) => left.localeCompare(right, 'uk'));
-    const missingCityDistricts = cityDistrictNames.filter(name => !allowedZones.has(normalizeZoneName(name)));
-    if (zones.length !== expectedZoneCount || missingCityDistricts.length) {
-        throw new Error(
-            `Очікується ${expectedZoneCount} дозволені зони в districts.geojson, знайдено ${zones.length}.`
-            + (missingCityDistricts.length ? ` Відсутні райони міста: ${missingCityDistricts.join(', ')}.` : '')
-        );
-    }
-
-    return zones;
+    return Array.from(allowedZones.values()).sort((left, right) => left.localeCompare(right, 'uk'));
 }
 
 function createLocationSystemPrompt(allowedZones) {
-    return `Твоя задача — найти ВСЕ упомянутые населенные пункты и сопоставить их с официальным списком зон (приводи названия городов и сел к названиям их громад). Возвращай результат в виде JSON-массива строк. Возвращай только точные названия зон из списка; если подходящих зон нет — верни []. Актуальный официальный список всех ${allowedZones.length} зон: ${JSON.stringify(allowedZones)}.`;
+    return `Твоя задача — найти ТОЛЬКО районы и микрорайоны внутри города Запорожье. СТРОГО игнорируй Запорожскую область и населённые пункты за пределами города.
+Возвращай ИСКЛЮЧИТЕЛЬНО JSON-массив строк. Без объектов, без ключей "name", без слова "район", без markdown и пояснений.
+ПРАВИЛЬНО: ["Космічний", "Вознесенівський"]
+НЕПРАВИЛЬНО: [{"name": "Космічний район"}]
+Если зон нет — верни []. Список зон: ${JSON.stringify(allowedZones)}.`;
 }
 
 function normalizeText(value) {
@@ -83,22 +110,28 @@ function parseLocationResponse(value, allowedZones) {
     let parsed;
     try {
         parsed = JSON.parse(content);
-    } catch (error) {
-        throw new Error(`Groq повернув некоректний JSON-масив локацій: ${error.message}`);
+    } catch {
+        return null;
     }
-    if (!Array.isArray(parsed) || !parsed.every(location => typeof location === 'string')) {
-        throw new Error('Groq має повернути JSON-масив рядків локацій.');
-    }
+    if (!Array.isArray(parsed)) return null;
+
+    const cleanLocations = parsed.map(item => {
+        if (typeof item === 'string') return item;
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return '';
+        const candidate = [item.name, item.location, ...Object.values(item)]
+            .find(value => typeof value === 'string' && value.trim());
+        return typeof candidate === 'string' ? candidate : '';
+    }).map(location => location.replace(/\s+район$/iu, '').trim()).filter(Boolean);
 
     const allowedByNormalizedName = new Map(
         allowedZones.map(location => [normalizeZoneName(location), location])
     );
     const locations = [];
     const seen = new Set();
-    for (const candidate of parsed) {
+    for (const candidate of cleanLocations) {
         const canonicalName = allowedByNormalizedName.get(normalizeZoneName(candidate));
         if (!canonicalName) {
-            console.warn('Відхилено зону, якої немає в дозволеному списку.');
+            console.warn(`Відхилено зону (немає в списку міста або це область): ${candidate}`);
             continue;
         }
         if (!seen.has(canonicalName)) {
@@ -110,17 +143,28 @@ function parseLocationResponse(value, allowedZones) {
 }
 
 async function extractLocations(groq, messageText, allowedZones, locationSystemPrompt) {
-    const response = await groq.chat.completions.create({
-        model: 'qwen/qwen3.8-27b',
-        temperature: 0,
-        max_tokens: 1024,
-        messages: [
-            { role: 'system', content: locationSystemPrompt },
-            { role: 'user', content: messageText }
-        ]
-    });
+    let response;
+    try {
+        response = await groq.chat.completions.create({
+            model: 'llama3-8b-8192', // Быстрая модель, лучше держит JSON и меньше ест лимиты
+            temperature: 0,
+            max_tokens: 50, // Срезали лимит, чтобы избежать ошибки 429
+            messages: [
+                { role: 'system', content: locationSystemPrompt },
+                { role: 'user', content: messageText }
+            ]
+        });
+    } catch (error) {
+        if (error?.status === 429) {
+            console.error('Лимит запросов Groq (429). Ждем следующего сообщения.');
+        } else {
+            console.error('Ошибка API Groq:', error.message);
+        }
+        return null;
+    }
 
-    const locations = parseLocationResponse(response.choices[0]?.message?.content, allowedZones);
+    const locations = parseLocationResponse(response.choices?.[0]?.message?.content, allowedZones);
+    if (locations === null) return null;
     console.log(`Визначені дозволені зони: ${locations.length}`);
     return locations;
 }
@@ -183,9 +227,9 @@ async function main() {
         }
 
         const locations = await extractLocations(groq, messageText, allowedZones, locationSystemPrompt);
+        if (locations === null) return;
         if (!locations.length) {
             console.warn('У повідомленні не знайдено дозволених зон.');
-            await bot.sendMessage(chatId, '⚠️ Не вдалося визначити зону');
             return;
         }
 
